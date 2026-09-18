@@ -1,0 +1,14 @@
+.employee-list-wrapper {
+    border: 1px solid gainsboro;
+    border-radius: 8px;
+    padding: 10px 20px 10px 20px;
+    display: block;
+    box-sizing: border-box;
+    max-height: 40vh;
+    overflow: auto;
+}
+.employee-list-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
