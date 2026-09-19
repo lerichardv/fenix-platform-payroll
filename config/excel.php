@@ -3,6 +3,10 @@
 use Maatwebsite\Excel\Excel;
 use PhpOffice\PhpSpreadsheet\Reader\Csv;
 
+if (!class_exists('Maatwebsite\Excel\Excel')) {
+    return [];
+}
+
 return [
     'exports' => [
 
@@ -128,7 +132,7 @@ return [
             'enclosure'        => '"',
             'escape_character' => '\\',
             'contiguous'       => false,
-            'input_encoding'   => Csv::GUESS_ENCODING,
+            'input_encoding'   => class_exists(Csv::class) ? Csv::GUESS_ENCODING : 'guess',
         ],
 
         /*

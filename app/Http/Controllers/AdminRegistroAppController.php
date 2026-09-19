@@ -73,7 +73,6 @@ class AdminRegistroAppController extends Controller
         ];
 
         return view('admin.registro_tarea')
-        // return view('admin.sistema_cerrado')
             ->with('datosRegistro', $datosRegistro)
             ->with('listaEmpleados', $listaEmpleados->toArray())
             ->with('listaGranjas', $listaGranjas->toArray())
@@ -125,7 +124,7 @@ class AdminRegistroAppController extends Controller
                 'fecha_salida' => $final_date,
                 'registros_fechas' => $bitacora,
                 'pack_types' => Paquete::activos()->get()->toJson(),
-                'packs_farms_category_assignment' => PaqueteFarmLocation::all()->toJson()
+                'packs_farms_category_assignment' => PaqueteFarmLocation::getPackData(),
             ]
         ]);
     }
@@ -975,6 +974,7 @@ class AdminRegistroAppController extends Controller
 
         return 0;
     }
+
     private function comprobarHoraRegistroFaltante($bitacora)
     {
         foreach ($bitacora as $registro) {
@@ -1008,9 +1008,199 @@ class AdminRegistroAppController extends Controller
             'data' => [
                 'registroTareasInificadas' => $registroTareasInificadas,
                 'pack_types' => Paquete::activos()->get()->toJson(),
-                'packs_farms_category_assignment' => PaqueteFarmLocation::all()->toJson()
+                'packs_farms_category_assignment' => PaqueteFarmLocation::getPackData()
             ]
         ]);
+    }
+    public function listaDatosEscaneadosPorCodCrew(Request $request)
+    {
+
+        HelpController::setDatabaseModeParaGrandesQuerys();
+
+        $codCrew = $request->input('cod_crew');
+
+        $datosEscaneados = DB::table('pay_lista_empleados_jobs')
+            ->select(
+                'cod_lista',
+                'pieces',
+                DB::raw("DATE_FORMAT(hora_escaneo, '%H:%i') as hora_escaneo"),
+                DB::raw("COALESCE(comentario, '') as comentario")
+            )
+            ->where('cod_crew', $codCrew)
+            ->where('pieces', '>', 0)
+            ->orderByRaw("DATE_FORMAT(hora_escaneo, '%H:%i') ASC")
+            ->get();
+
+        if ($datosEscaneados->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No data found',
+                'algo' => $datosEscaneados,
+                'codCrew' => $codCrew,
+                'data' => [
+                    'datosEscaneados' => $datosEscaneados,
+
+                ]
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data successfully retrieved',
+            'data' => [
+                'datosEscaneados' => $datosEscaneados,
+            ]
+        ]);
+    }
+    public function guardarRegistroDatosEscaneo(Request $request)
+    {
+
+        HelpController::setDatabaseModeParaGrandesQuerys();
+
+        $codCrew = $request->input('cod_crew');
+
+        $datosEscaneadosArray = $request->input('datosEscaneados');
+        $queryResult = DB::table('pay_lista_empleados_jobs')
+            ->select('cod_estado_job', 'terminado', 'hora_fuerza_terminado', 'GPS')
+            ->where('cod_crew', $codCrew)
+            ->where('pieces', 0)
+            ->get();
+
+        Log::info('Query result: ' . $queryResult);
+        if ($queryResult->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No data found for the given crew',
+                'data' => []
+            ]);
+        }
+        if (is_array($datosEscaneadosArray)) {
+            session_start();
+            if (!isset($_SESSION['cod_usuario'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Session expired or not started',
+                    'data' => []
+                ]);
+            }
+            // The DB::beginTransaction() method initiates a database transaction.
+            // This means that any database operations that modify data will remain "pending"
+            // until the transaction is either committed (with DB::commit()) or rolled back (with DB::rollBack()).
+            // Using a transaction ensures data integrity, especially when multiple operations must either all succeed or all fail.
+            DB::beginTransaction();
+            try {
+                $cantidadTotalPiezas = 0;
+                foreach ($datosEscaneadosArray as $dato) {
+                    $horaEscaneo = date('Y-m-d') . ' ' . $dato['hora'];
+                    if ($dato['nuevo'] == 1 && $dato['vigencia'] == 1) {
+                        $cantidadTotalPiezas += $dato['pieza'];
+
+                        DB::table('pay_lista_empleados_jobs')->insert([
+                            'cod_crew'              => $codCrew,
+                            'pieces'                => $dato['pieza'],
+                            'comentario'            => $dato['comentario'],
+                            'cod_estado_job'        => $queryResult[0]->cod_estado_job,
+                            'registro_manual'       => 1,
+                            'hora_escaneo'          => $horaEscaneo,
+                            'terminado'             => $queryResult[0]->terminado,
+                            'hora_fuerza_terminado' => $queryResult[0]->hora_fuerza_terminado,
+                            'GPS'                   => $queryResult[0]->GPS,
+                            'user_insert'           => $_SESSION['cod_usuario'],
+                        ]);
+                    } else {
+                        if ($dato['nuevo'] == 0) {
+
+                            if ($dato['vigencia'] == 0) {
+                                DB::table('pay_lista_empleados_jobs')
+                                    ->where('cod_lista', $dato['cod_lista'])
+                                    ->delete();
+                            } else {
+                                $cantidadTotalPiezas += $dato['pieza'];
+                                DB::table('pay_lista_empleados_jobs')
+                                    ->where('cod_lista', $dato['cod_lista'])
+                                    ->update([
+                                        'pieces'       => $dato['pieza'],
+                                        'comentario'   => $dato['comentario'],
+                                        'hora_escaneo' => $horaEscaneo,
+                                    ]);
+                            }
+                        }
+                    }
+                }
+                DB::commit();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Data successfully saved',
+                    'data' => [
+                        'cantidad_total_piezas' => $cantidadTotalPiezas
+                    ]
+                ]);
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error saving data: ' . $e->getMessage(),
+                    'data' => []
+                ]);
+            }
+        }
+    }
+
+
+    public function agregarComentarioRegistroIngreso(Request $request)
+    {
+        session_start();
+        $comentario_registro_ingreso = $request->input('comentario_registro_ingreso');
+        $id_registro_ingreso = $request->input('id_registro_ingreso');
+        $fecha_comentario = $request->input('fecha_comentario');
+
+
+        $registro = DB::table('pay_bitacora_inicio_sesion')
+            ->select('cod_inicio_sesion')
+            ->where('cod_inicio_sesion', $id_registro_ingreso)
+            ->first();
+
+        if (!$registro) {
+            return response()->json(['success' => false, 'message' => 'Entry record not found', 'data' => $request->all()]);
+        }
+
+        $resultadoDeActualizacion = DB::table('pay_bitacora_inicio_sesion')
+            ->where('cod_inicio_sesion', $id_registro_ingreso)
+            ->update([
+                'comentario' => $comentario_registro_ingreso,
+                'cod_usuario_insert_coment' => $_SESSION['cod_usuario'],
+                'fecha_comentario' => Carbon::now()->format('Y-m-d H:i:s')
+            ]);
+        if (!$resultadoDeActualizacion) {
+            return response()->json(['success' => false, 'message' => 'Failed to update', 'data' => $request->all()]);
+        } else {
+            DB::table('pay_bitac_comentarios_inicios_sesiones')
+                ->where('cod_inicio_sesion', $id_registro_ingreso)
+                ->where('activo', 1)
+                ->update([
+                    'activo' => 0,
+                ]);
+
+            DB::table('pay_bitac_comentarios_inicios_sesiones')->insert([
+                'cod_inicio_sesion' => $id_registro_ingreso,
+                'comentario' => $comentario_registro_ingreso,
+                'cod_usuario_insert_coment' => $_SESSION['cod_usuario'],
+                'activo' => 1
+            ]);
+
+            $usuario = DB::table('usu_usuarios')
+                ->select(DB::raw("CONCAT(nombre_1, ' ', apellido_1) AS nombre"))
+                ->where('cod_usuario', $_SESSION['cod_usuario'])
+                ->first();
+            $nombre_admin_comentario = $usuario ? $usuario->nombre : null;
+
+            return response()->json(['success' => true, 'message' => 'Comment added successfully', 'data' => [
+                'comentario_registro_ingreso' => $comentario_registro_ingreso,
+                'id_registro_ingreso' => $id_registro_ingreso,
+                'fecha_comentario' => $fecha_comentario,
+                'nombre_admin_comentario' => $nombre_admin_comentario
+            ]]);
+        }
     }
 
 

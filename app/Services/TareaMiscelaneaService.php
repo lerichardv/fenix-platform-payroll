@@ -103,7 +103,7 @@ class TareaMiscelaneaService
             ->get()
             ->toArray();
 
-        // Sobrescribimos cantidad_escaneo con la suma real directa por crew para evitar distorsiones por joins
+        // Sobrescribimos cantidad_escaneo con la suma real directa por crew reutilizando TareaHarvestService
         if (!empty($tareasMiscelaneas)) {
             $codCrews = collect($tareasMiscelaneas)->pluck('cod_crew')->filter()->unique()->toArray();
             if (!empty($codCrews)) {

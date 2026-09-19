@@ -90,7 +90,7 @@ class CamposController extends Controller
 
 
     /**
-     * Store a newly created resource in storage.
+     * Envia los campos asociados a un cropage especifico y una plantación
      */
     public function campoUsadoEnCropAge(Request $request)
     {
@@ -99,114 +99,49 @@ class CamposController extends Controller
         $body = $request->all();
         $codsCampos = explode(',', $body['codsCampos']); // 16 / [1,5]
         $cod_plantacion = $body['cod_plantacion'] ?? 0; // 6539
+
+        $por_granja = $body['por_granja'] ?? 0; // 1: true, 0: false
+        $id_granja = $body['id_granja'] ?? 0; // 2
+
         $fieldsFiltrado = [];
         $fields = $this->campoRepoRepository->whereIn('cod_field', $codsCampos)->where('activo', 1)->get(['cod_field', 'cod_farm', 'field', 'activo']);
-        $alMenosUnBloque =  false;
 
-        // $fieldsFiltrado[] = $fields;
         foreach ($fields as $field) {
             $field->cod_plantacion = (int)$cod_plantacion;
         }
 
         $fieldsFiltrado = $fields;
 
-        // foreach ($fields as $field) {
-        //     // Access each field object using $field variable
-        //     // Add your code here
-        //     $codHarvestFarms = DB::table('pay_harvests_fields')
-        //         ->join('pay_jobs_progresos', 'pay_jobs_progresos.cod_harvest', '=', 'pay_harvests_fields.cod_harvest')
-        //         ->join('pay_estados_jobs', 'pay_estados_jobs.cod_estado_job', '=', 'pay_jobs_progresos.cod_estado_job')
-        //         ->select(
-        //             'pay_harvests_fields.cod_harvest_fields',
-        //             'pay_harvests_fields.cod_field',
-        //             'pay_harvests_fields.cod_harvest'
-        //         )
-        //         ->where('pay_harvests_fields.cod_field', $field->cod_field)
-        //         ->whereIn('pay_estados_jobs.estado_job', ['lista', 'iniciada'])
-        //         ->get();
-        //     HelpController::desconectarBaseDatos();
-        //     if ($codHarvestFarms->isEmpty()) {
-        //         // Variable $codHarvestFarms is empty
-        //         $field->cod_plantacion = (int)$cod_plantacion;
-        //         $fieldsFiltrado[] = $field;
-        //     } else {
-        //         $alMenosUnBloque =  false;
-        //         foreach ($codHarvestFarms as $codHarvestField) {
-        //             // Variable $codHarvestFarms is not empty
-        //             // OPTIMIZAR
-        //             $harvests = DB::table('pay_harvests')
-        //                 ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_semilla_bloque', '=', 'pay_harvests.crop_age')
-        //                 ->select('pay_harvests.cod_harvest', 'pay_harvests.crop_age', 'far_crop_semillas_bloques.cod_semilla', 'far_crop_semillas_bloques.cod_bloque_implementado')
-        //                 // ->where('pay_harvests.cod_harvest', $codHarvestField->cod_harvest) // 42 = 1
-        //                 ->where('pay_harvests.cod_plantacion', $cod_plantacion) // 6539 = 19
-        //                 ->get();
-        //             if (!$harvests->isEmpty()) {
-        //                 foreach ($harvests as $harvest) {
-        //                     // OPTIMIZAR
-        //                     $datosSemillas = DB::table('far_crop_semillas_bloques')
-        //                         ->join('far_crop_bloques_implementados', 'far_crop_bloques_implementados.cod_bloque_implementado', '=', 'far_crop_semillas_bloques.cod_bloque_implementado')
-        //                         ->select(
-        //                             DB::raw('GROUP_CONCAT(DISTINCT far_crop_semillas_bloques.cod_semilla_bloque) AS cod_semilla_bloque'),
-        //                             DB::raw('GROUP_CONCAT(DISTINCT far_crop_semillas_bloques.cod_bloque_implementado) AS cod_bloque_implementado'),
-        //                             DB::raw('GROUP_CONCAT(DISTINCT far_crop_semillas_bloques.cod_semilla) AS cod_semilla'),
-        //                             DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque) AS cod_bloque'),
+        HelpController::desconectarBaseDatos();
 
-        //                         )
-        //                         ->where('far_crop_semillas_bloques.cod_semilla', $harvest->cod_semilla) //
-        //                         ->groupBy('far_crop_bloques_implementados.cod_bloque')
-        //                         ->distinct()
-        //                         ->get();
+        return $fieldsFiltrado;
+    }
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function obtenerCampos(Request $request)
+    {
 
-        //                     if (!$datosSemillas->isEmpty()) {
-        //                         foreach ($datosSemillas as $semilla) {
-        //                             //Buscar los bloques que tienen la semilla
-        //                             $bloques = DB::table('far_crop_bloques_implementados')
-        //                                 ->select('far_crop_bloques_implementados.cod_bloque', 'far_bloques.bloque', 'far_crop_bloques_implementados.cod_field')
-        //                                 ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
-        //                                 ->join('far_bloques', 'far_bloques.cod_bloque', '=', 'far_crop_bloques_implementados.cod_bloque')
-        //                                 ->where('far_crop_bloques_implementados.cod_farm', $field->cod_farm)
-        //                                 ->where('far_crop_bloques_implementados.cod_field', $field->cod_field)
-        //                                 ->where('far_crop_semillas_bloques.cod_semilla', $semilla->cod_semilla)
-        //                                 ->where('far_crop_semillas_bloques.cod_plantacion', $cod_plantacion)
-        //                                 ->groupBy('far_crop_bloques_implementados.cod_bloque')
-        //                                 ->distinct()
-        //                                 ->get();
-        //                             foreach ($bloques as $bloque) {
-        //                                 $harvestsBlocks = DB::table('pay_harvests_blocks')
-        //                                     ->join('pay_jobs_progresos', 'pay_jobs_progresos.cod_harvest', '=', 'pay_harvests_blocks.cod_harvest')
-        //                                     ->join('pay_estados_jobs', 'pay_estados_jobs.cod_estado_job', '=', 'pay_jobs_progresos.cod_estado_job')
-        //                                     ->select(
-        //                                         'pay_harvests_blocks.cod_harvests_blocks',
-        //                                         'pay_harvests_blocks.cod_block',
-        //                                         'pay_harvests_blocks.cod_harvest',
-        //                                         'pay_jobs_progresos.cod_job',
-        //                                         'pay_jobs_progresos.cod_job_local',
-        //                                         'pay_jobs_progresos.cod_estado_job',
-        //                                         'pay_estados_jobs.estado_job'
-        //                                     )
-        //                                     ->where('pay_harvests_blocks.cod_block', $bloque->cod_bloque)
-        //                                     ->where('pay_harvests_blocks.cod_plantacion', $cod_plantacion)
-        //                                     ->whereIn('pay_estados_jobs.estado_job', ['lista', 'iniciada'])
-        //                                     ->get();
-        //                                 if ($harvestsBlocks->isEmpty()) {
-        //                                     $alMenosUnBloque = true;
-        //                                 }
-        //                             }
-        //                         }
-        //                     } else {
-        //                         $alMenosUnBloque = true;
-        //                     }
-        //                 }
-        //             } else {
-        //                 $alMenosUnBloque = true;
-        //             }
-        //         }
-        //         if ($alMenosUnBloque) {
-        //             $field->cod_plantacion = (int)$cod_plantacion;
-        //             $fieldsFiltrado[] = $field;
-        //         }
-        //     }
-        // }
+
+        $body = $request->all();
+        $codsCampos = explode(',', $body['codsCampos']); // 16 / [1,5]
+        $cod_plantacion = $body['cod_plantacion'] ?? 0; // 6539
+
+        $por_granja = $body['por_granja'] ?? 0; // 1: true, 0: false
+        $id_granja = $body['id_granja'] ?? 0; // 2
+        $fieldsFiltrado = [];
+        if ($por_granja == 1) {
+            $fields = $this->campoRepoRepository->where('cod_farm', $id_granja)->where('activo', 1)->get(['cod_field', 'cod_farm', 'field', 'activo']);
+        } else {
+            $fields = $this->campoRepoRepository->whereIn('cod_field', $codsCampos)->where('activo', 1)->get(['cod_field', 'cod_farm', 'field', 'activo']);
+        }
+
+        foreach ($fields as $field) {
+            $field->cod_plantacion = (int)$cod_plantacion;
+        }
+
+        $fieldsFiltrado = $fields->sortBy('field')->values();
+
         HelpController::desconectarBaseDatos();
 
         return $fieldsFiltrado;

@@ -21,10 +21,6 @@ use App\Http\Middleware\VerificarInicioSesion;
 
 Route::middleware(VerificarInicioSesion::class)
     ->get('/', [AdminRegistroAppController::class, 'index'])->name('home');
-// Route::middleware(VerificarInicioSesion::class)
-//     ->get('/', function () {
-//         return view('admin.registro_tarea');
-//     });
 // Route::get('/', [AdminRegistroAppController::class, 'index'])->name('home');
 Route::post('/public/access_token', [TokenSesionController::class, 'manejarAccessToken']);
 Route::post('/access_token', [TokenSesionController::class, 'manejarAccessToken']);

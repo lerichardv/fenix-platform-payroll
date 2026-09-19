@@ -108,6 +108,8 @@ class CrewJobController extends Controller
         // } else if ($datosMiscelaneos != -1) {
         //     return response()->json(['code' => 1443, 'message' => 'Miscellaneous Tiene datos', 'extra'=>$datosMiscelaneos], 200);
         // }
+
+        //TODO: VERIFICAR QUE EL COMPORTAMIENTO ES EL ESPERADO (fecha de anotación 13-05-2025)
         $usuarios = DB::table('usu_usuarios')
             ->whereIn('cod_usuario', $codsEmpleados)
             ->where('disponible', 5)
@@ -119,8 +121,6 @@ class CrewJobController extends Controller
         if (!$usuarios->isEmpty()) {
             // return response()->json(['code' => 1447, 'message' => 'At least one employee is not available', 'extra' => $codsEmpleados], 400);
         } else {
-            // Variable $usuarios has data
-            // Add your logic here
             if ($datosHarvest != -1) {
                 $codigosCampos = json_decode($datosHarvest['cods_fields'], true);
                 $codigosBloques = json_decode($datosHarvest['cods_blocks'], true);

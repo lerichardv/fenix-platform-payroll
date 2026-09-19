@@ -175,159 +175,96 @@ class CropAgeController extends Controller
     }
     public function cropAsociadasAGranja(string $id)
     {
-        HelpController::setDatabaseModeParaAgrupacionesGrandes();
-        // DB::statement("SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
+        try {
 
-        //
-        $query = DB::table('far_crop_bloques_implementados')
-            ->select(
-                'far_crop_bloques_implementados.cod_farm',
-                'far_crop_bloques_implementados.cod_bloque_implementado',
-                DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque_implementado) AS bloques_implementados_agrupado'),
-                DB::raw('GROUP_CONCAT(DISTINCT far_crop_semillas_bloques.cod_semilla_bloque) AS cod_crop_age_agrupado'),
-                'far_crop_bloques_implementados.cod_bloque',
-                DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque) AS cods_bloques'),
-                'far_crop_bloques_implementados.cod_field',
-                DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_field) AS cods_fields'),
-                'far_crop_semillas_bloques.cod_semilla_bloque AS cod_crop_age',
-                'far_crop_semillas_bloques.cod_plantacion',
-                'far_crop_semillas_bloques.cod_semilla',
-                'far_crop_semillas_bloques.fecha_plantacion',
-                'bw_inventario_semilla.nombre_semilla',
-                'bw_inventario_semilla.cod_categoria',
-                'bw_inventario_plantaciones.edad',
-                'bw_inventario_categorias_semillas.nombre AS nombre_categoria',
-                'bw_inventario_categorias_semillas.cantidadDiasEspera',
-                DB::raw('concat(bw_inventario_plantaciones.edad," - ",bw_inventario_semilla.nombre_semilla) as datos_semillas'),
-                DB::raw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) as cantidad_dias'),
-            )
-            ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
-            ->join('bw_inventario_semilla', 'bw_inventario_semilla.cod_inventario', '=', 'far_crop_semillas_bloques.cod_semilla')
-            ->join('bw_inventario_plantaciones', 'bw_inventario_plantaciones.cod_plantacion', '=', 'far_crop_semillas_bloques.cod_plantacion') // Numeros de dias de plantacion en granja
-            ->join('bw_inventario_categorias_semillas', 'bw_inventario_categorias_semillas.cod_categoria', '=', 'bw_inventario_semilla.cod_categoria')
-            ->where('far_crop_bloques_implementados.cod_farm', $id)
-            ->where('far_crop_semillas_bloques.completada', 0)
-            ->whereRaw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) >= bw_inventario_categorias_semillas.cantidadDiasEspera')
-            ->groupBy('far_crop_semillas_bloques.cod_semilla')
-            ->groupBy('bw_inventario_plantaciones.edad')
-            ->orderBy('bw_inventario_semilla.nombre_semilla')
-            ->orderBy('bw_inventario_plantaciones.edad')
-            ->get();
-        // HelpController::setDatabaseModeOnlyFullGroupBy();
+            HelpController::setDatabaseModeParaAgrupacionesGrandes();
 
-        // $query = DB::table('far_crop_bloques_implementados')
-        //     ->select(
-        //         'far_crop_bloques_implementados.cod_farm',
-        //         'far_crop_bloques_implementados.cod_bloque_implementado',
-        //         DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque_implementado) AS bloques_implementados_agrupado'),
-        //         DB::raw('GROUP_CONCAT(DISTINCT far_crop_semillas_bloques.cod_semilla_bloque) AS cod_crop_age_agrupado'),
-        //         'far_crop_bloques_implementados.cod_bloque',
-        //         DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque) AS cods_bloques'),
-        //         'far_crop_bloques_implementados.cod_field',
-        //         DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_field) AS cods_fields'),
-        //         'far_crop_semillas_bloques.cod_semilla_bloque AS cod_crop_age',
-        //         'far_crop_semillas_bloques.cod_plantacion',
-        //         'far_crop_semillas_bloques.cod_semilla',
-        //         'bw_inventario_semilla.nombre_semilla',
-        //         'bw_inventario_semilla.cod_categoria',
-        //         'bw_inventario_plantaciones.edad',
-        //         'bw_inventario_categorias_semillas.nombre AS nombre_categoria',
-        //         'bw_inventario_categorias_semillas.cantidadDiasEspera',
-        //         DB::raw('CONCAT(bw_inventario_plantaciones.edad, " - ", bw_inventario_semilla.nombre_semilla) AS datos_semillas'),
-        //         DB::raw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) as dias_diferencias_actuales')
-        //     )
-        //     ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
-        //     ->join('bw_inventario_semilla', 'bw_inventario_semilla.cod_inventario', '=', 'far_crop_semillas_bloques.cod_semilla')
-        //     ->join('bw_inventario_plantaciones', 'bw_inventario_plantaciones.cod_plantacion', '=', 'far_crop_semillas_bloques.cod_plantacion')
-        //     ->join('bw_inventario_categorias_semillas', 'bw_inventario_categorias_semillas.cod_categoria', '=', 'bw_inventario_semilla.cod_categoria')
-        //     ->where('far_crop_bloques_implementados.cod_farm', $id)
-        //     ->where('far_crop_semillas_bloques.completada', 0)
-        //     ->whereRaw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) >= bw_inventario_categorias_semillas.cantidadDiasEspera')
-        //     ->groupBy('far_crop_semillas_bloques.cod_semilla', 'bw_inventario_plantaciones.edad')
-        //     ->orderBy('bw_inventario_semilla.nombre_semilla')
-        //     ->orderBy('bw_inventario_plantaciones.edad')
-        //     ->get();
+            $query = DB::table('far_crop_bloques_implementados')
+                ->select(
+                    'far_crop_bloques_implementados.cod_farm',
+                    'far_crop_bloques_implementados.cod_bloque_implementado',
+                    DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque_implementado) AS bloques_implementados_agrupado'),
+                    DB::raw('GROUP_CONCAT(DISTINCT far_crop_semillas_bloques.cod_semilla_bloque) AS cod_crop_age_agrupado'),
+                    'far_crop_bloques_implementados.cod_bloque',
+                    DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque) AS cods_bloques'),
+                    'far_crop_bloques_implementados.cod_field',
+                    DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_field) AS cods_fields'),
+                    'far_crop_semillas_bloques.cod_semilla_bloque AS cod_crop_age',
+                    'far_crop_semillas_bloques.cod_plantacion',
+                    'far_crop_semillas_bloques.cod_semilla',
+                    'far_crop_semillas_bloques.fecha_plantacion',
+                    'bw_inventario_semilla.nombre_semilla',
+                    'bw_inventario_semilla.cod_categoria',
+                    'bw_inventario_plantaciones.edad',
+                    'bw_inventario_categorias_semillas.nombre AS nombre_categoria',
+                    'bw_inventario_categorias_semillas.cantidadDiasEspera',
+                    DB::raw('concat(bw_inventario_plantaciones.edad," - ",bw_inventario_semilla.nombre_semilla) as datos_semillas'),
+                    DB::raw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) as cantidad_dias'),
+                )
+                ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
+                ->join('bw_inventario_semilla', 'bw_inventario_semilla.cod_inventario', '=', 'far_crop_semillas_bloques.cod_semilla')
+                ->join('bw_inventario_plantaciones', 'bw_inventario_plantaciones.cod_plantacion', '=', 'far_crop_semillas_bloques.cod_plantacion') // Numeros de dias de plantacion en granja
+                ->join('bw_inventario_categorias_semillas', 'bw_inventario_categorias_semillas.cod_categoria', '=', 'bw_inventario_semilla.cod_categoria')
+                ->where('far_crop_bloques_implementados.cod_farm', $id)
+                ->where('far_crop_semillas_bloques.completada', 0)
+                ->whereRaw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) >= bw_inventario_categorias_semillas.cantidadDiasEspera')
+                ->groupBy('far_crop_semillas_bloques.cod_semilla')
+                ->groupBy('bw_inventario_plantaciones.edad')
+                ->orderBy('bw_inventario_semilla.nombre_semilla')
+                ->orderBy('bw_inventario_plantaciones.edad')
+                ->get();
+            HelpController::desconectarBaseDatos();
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'An error occurred while fetching data', 'message' => $e->getMessage()], 500);
+        }
 
-        HelpController::desconectarBaseDatos();
 
         return $query;
     }
     public function cropAsociadasAGranjaSinVerificarDiasPlantados(string $id)
     {
-        HelpController::setDatabaseModeParaAgrupacionesGrandes();
-        // DB::statement("SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
+        try {
+            HelpController::setDatabaseModeParaAgrupacionesGrandes();
 
-        //
-        $query = DB::table('far_crop_bloques_implementados')
-            ->select(
-                'far_crop_bloques_implementados.cod_farm',
-                'far_crop_bloques_implementados.cod_bloque_implementado',
-                DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque_implementado) AS bloques_implementados_agrupado'),
-                DB::raw('GROUP_CONCAT(DISTINCT far_crop_semillas_bloques.cod_semilla_bloque) AS cod_crop_age_agrupado'),
-                'far_crop_bloques_implementados.cod_bloque',
-                DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque) AS cods_bloques'),
-                'far_crop_bloques_implementados.cod_field',
-                DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_field) AS cods_fields'),
-                'far_crop_semillas_bloques.cod_semilla_bloque AS cod_crop_age',
-                'far_crop_semillas_bloques.cod_plantacion',
-                'far_crop_semillas_bloques.cod_semilla',
-                'far_crop_semillas_bloques.fecha_plantacion',
-                'bw_inventario_semilla.nombre_semilla',
-                'bw_inventario_semilla.cod_categoria',
-                'bw_inventario_plantaciones.edad',
-                'bw_inventario_categorias_semillas.nombre AS nombre_categoria',
-                'bw_inventario_categorias_semillas.cantidadDiasEspera',
-                DB::raw('concat(bw_inventario_plantaciones.edad," - ",bw_inventario_semilla.nombre_semilla) as datos_semillas'),
-                DB::raw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) as cantidad_dias'),
-            )
-            ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
-            ->join('bw_inventario_semilla', 'bw_inventario_semilla.cod_inventario', '=', 'far_crop_semillas_bloques.cod_semilla')
-            ->join('bw_inventario_plantaciones', 'bw_inventario_plantaciones.cod_plantacion', '=', 'far_crop_semillas_bloques.cod_plantacion') // Numeros de dias de plantacion en granja
-            ->join('bw_inventario_categorias_semillas', 'bw_inventario_categorias_semillas.cod_categoria', '=', 'bw_inventario_semilla.cod_categoria')
-            ->where('far_crop_bloques_implementados.cod_farm', $id)
-            ->where('far_crop_semillas_bloques.completada', 0)
-            // ->whereRaw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) >= bw_inventario_categorias_semillas.cantidadDiasEspera')
-            ->groupBy('far_crop_semillas_bloques.cod_semilla')
-            ->groupBy('bw_inventario_plantaciones.edad')
-            ->orderBy('bw_inventario_semilla.nombre_semilla')
-            ->orderBy('bw_inventario_plantaciones.edad')
-            ->get();
-        // HelpController::setDatabaseModeOnlyFullGroupBy();
+            $query = DB::table('far_crop_bloques_implementados')
+                ->select(
+                    'far_crop_bloques_implementados.cod_farm',
+                    'far_crop_bloques_implementados.cod_bloque_implementado',
+                    DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque_implementado) AS bloques_implementados_agrupado'),
+                    DB::raw('GROUP_CONCAT(DISTINCT far_crop_semillas_bloques.cod_semilla_bloque) AS cod_crop_age_agrupado'),
+                    'far_crop_bloques_implementados.cod_bloque',
+                    DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque) AS cods_bloques'),
+                    'far_crop_bloques_implementados.cod_field',
+                    DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_field) AS cods_fields'),
+                    'far_crop_semillas_bloques.cod_semilla_bloque AS cod_crop_age',
+                    'far_crop_semillas_bloques.cod_plantacion',
+                    'far_crop_semillas_bloques.cod_semilla',
+                    'far_crop_semillas_bloques.fecha_plantacion',
+                    'bw_inventario_semilla.nombre_semilla',
+                    'bw_inventario_semilla.cod_categoria',
+                    'bw_inventario_plantaciones.edad',
+                    'bw_inventario_categorias_semillas.nombre AS nombre_categoria',
+                    'bw_inventario_categorias_semillas.cantidadDiasEspera',
+                    DB::raw('concat(bw_inventario_plantaciones.edad," - ",bw_inventario_semilla.nombre_semilla) as datos_semillas'),
+                    DB::raw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) as cantidad_dias'),
+                )
+                ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
+                ->join('bw_inventario_semilla', 'bw_inventario_semilla.cod_inventario', '=', 'far_crop_semillas_bloques.cod_semilla')
+                ->join('bw_inventario_plantaciones', 'bw_inventario_plantaciones.cod_plantacion', '=', 'far_crop_semillas_bloques.cod_plantacion') // Numeros de dias de plantacion en granja
+                ->join('bw_inventario_categorias_semillas', 'bw_inventario_categorias_semillas.cod_categoria', '=', 'bw_inventario_semilla.cod_categoria')
+                ->where('far_crop_bloques_implementados.cod_farm', $id)
+                ->where('far_crop_semillas_bloques.completada', 0)
+                // ->whereRaw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) >= bw_inventario_categorias_semillas.cantidadDiasEspera')
+                ->groupBy('far_crop_semillas_bloques.cod_semilla')
+                ->groupBy('bw_inventario_plantaciones.edad')
+                ->orderBy('bw_inventario_semilla.nombre_semilla')
+                ->orderBy('bw_inventario_plantaciones.edad')
+                ->get();
+            HelpController::desconectarBaseDatos();
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'An error occurred while fetching data', 'message' => $e->getMessage()], 500);
+        }
 
-        // $query = DB::table('far_crop_bloques_implementados')
-        //     ->select(
-        //         'far_crop_bloques_implementados.cod_farm',
-        //         'far_crop_bloques_implementados.cod_bloque_implementado',
-        //         DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque_implementado) AS bloques_implementados_agrupado'),
-        //         DB::raw('GROUP_CONCAT(DISTINCT far_crop_semillas_bloques.cod_semilla_bloque) AS cod_crop_age_agrupado'),
-        //         'far_crop_bloques_implementados.cod_bloque',
-        //         DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_bloque) AS cods_bloques'),
-        //         'far_crop_bloques_implementados.cod_field',
-        //         DB::raw('GROUP_CONCAT(DISTINCT far_crop_bloques_implementados.cod_field) AS cods_fields'),
-        //         'far_crop_semillas_bloques.cod_semilla_bloque AS cod_crop_age',
-        //         'far_crop_semillas_bloques.cod_plantacion',
-        //         'far_crop_semillas_bloques.cod_semilla',
-        //         'bw_inventario_semilla.nombre_semilla',
-        //         'bw_inventario_semilla.cod_categoria',
-        //         'bw_inventario_plantaciones.edad',
-        //         'bw_inventario_categorias_semillas.nombre AS nombre_categoria',
-        //         'bw_inventario_categorias_semillas.cantidadDiasEspera',
-        //         DB::raw('CONCAT(bw_inventario_plantaciones.edad, " - ", bw_inventario_semilla.nombre_semilla) AS datos_semillas'),
-        //         DB::raw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) as dias_diferencias_actuales')
-        //     )
-        //     ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
-        //     ->join('bw_inventario_semilla', 'bw_inventario_semilla.cod_inventario', '=', 'far_crop_semillas_bloques.cod_semilla')
-        //     ->join('bw_inventario_plantaciones', 'bw_inventario_plantaciones.cod_plantacion', '=', 'far_crop_semillas_bloques.cod_plantacion')
-        //     ->join('bw_inventario_categorias_semillas', 'bw_inventario_categorias_semillas.cod_categoria', '=', 'bw_inventario_semilla.cod_categoria')
-        //     ->where('far_crop_bloques_implementados.cod_farm', $id)
-        //     ->where('far_crop_semillas_bloques.completada', 0)
-        //     ->whereRaw('DATEDIFF(CURDATE(), far_crop_semillas_bloques.fecha_plantacion) >= bw_inventario_categorias_semillas.cantidadDiasEspera')
-        //     ->groupBy('far_crop_semillas_bloques.cod_semilla', 'bw_inventario_plantaciones.edad')
-        //     ->orderBy('bw_inventario_semilla.nombre_semilla')
-        //     ->orderBy('bw_inventario_plantaciones.edad')
-        //     ->get();
-
-        HelpController::desconectarBaseDatos();
 
         return $query;
     }

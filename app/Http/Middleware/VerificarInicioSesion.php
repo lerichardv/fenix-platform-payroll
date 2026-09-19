@@ -19,9 +19,9 @@ class VerificarInicioSesion
     public function handle(Request $request, Closure $next): Response
     {
 
-        // if(env('APP_ENV') == 'local'){
-        //     return $next($request);
-        // }
+        if(env('APP_ENV') == 'local'){
+            return $next($request);
+        }
         session_start();
         // Determinamos si están en la sesión las variables de autenticación
         if (!isset($_SESSION['php_access_token']) && !isset($_SESSION['cod_usuario'])) {

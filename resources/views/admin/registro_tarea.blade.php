@@ -181,10 +181,10 @@
 
         @media (min-height: 900px) {
             /* #contendor_lista_empleados {
-                                                                                                                            overflow-y: scroll;
-                                                                                                                            max-height: 5400px;
-                                                                                                                            min-height: 5400px;
-                                                                                                                        } */
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    overflow-y: scroll;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    max-height: 5400px;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    min-height: 5400px;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                } */
 
             #contenedor_principa_tabla {
                 overflow-y: scroll;
@@ -221,10 +221,214 @@
         }
     </style>
     <script>
+        var cantidadEscaneos = 0;
+
         function abrirModal(codInicioSesion, cantidadRegistros, fecha) {
             $('#fecha_del_grupo_modal').val(fecha);
             $('#formularioAgregarTarea').modal('show');
         }
+
+        function abrirModalAgregarCantidad(cod_crew, idUnicoFila) {
+
+            $('#listado_datos_escaneados').empty();
+            crearloginPantallaCompleta();
+            $.ajax({
+                url: window.location.href + 'api/v1/empleado_administracion/listaDatosEscaneadosPorCodCrew',
+                type: 'POST',
+                data: {
+                    cod_crew: cod_crew
+
+                },
+                success: function(response) {
+
+                    const data = response.data.datosEscaneados;
+                    cantidadEscaneos = data.length;
+                    if (data.length > 0) {
+
+                        $.each(data, function(i, item) {
+                            $('#listado_datos_escaneados').append(`
+                                <div id="escaneo_${i}" style="width: 100%; text-align: right;" class="row display-flex">
+                                    <div style="float: right; padding: 0px">
+                                        <button id="btn_recuperar_${i}" type="button" class="d-none btn btn-info btn-sm" style="border-radius: 0;" onclick="recuperarEscaneado(${i}, 'contenedor_datos_escaneos_')">
+                                            <i class="fa-solid fa-rotate-left"></i>
+                                        </button>
+                                        <button id="btn_eliminar_${i}" type="button" class="btn btn-danger btn-sm" style="border-radius: 0;" onclick="desactivarEscaneo(${i}, 'contenedor_datos_escaneos_')">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div id="contenedor_datos_escaneos_${i}" class="contenedor_datos_escaneos col-12">
+                                        <input type="hidden" id="datos_nuevo_escaneo_${i}" value="0">
+                                        <input type="hidden" id="vigencia_escaneo_${i}" value="1">
+                                        <input type="hidden" id="datos_existento_${i}" value="${item.cod_lista}">
+                                        <input type="time" id="hora_escaneo_${i}" class="form-control" style="max-width: 20%;" value="${item.hora_escaneo}" onchange="adjustTimes()">
+                                        <input type="text" id="comentario_${i}" value="${item.comentario}" class="form-control" style="width: 60%;">
+                                        <div id="pieza_${i}" class="escaneo_previo d-flex justify-content-center align-items-center" style="background-color: grey; width: 10%; color: white; height: 100%;">
+                                            ${item.pieces}
+                                        </div>
+                                    </div>
+                                </div>
+
+                            `);
+                        });
+
+
+                    } else {
+                        // $('#' + id).append('<option value="-b" >Error loading payment types</option>');
+                    }
+
+                    adjustTimes();
+                    $('#cantidad_escaneos').text(cantidadEscaneos);
+                    $('#cod_crew_actual').val(cod_crew);
+                    $('#id_unico_fila').val(idUnicoFila);
+                    $('#formCantidadesEscaneadas').modal('show');
+
+                },
+                fail: function(xhr) {
+                    console.error('Error:', xhr.responseText);
+                    const overlay = document.getElementById('global-loading-overlay');
+                    if (overlay) {
+                        overlay.remove();
+                    }
+                },
+                complete: () => {
+                    const overlay = document.getElementById('global-loading-overlay');
+                    console.log({
+                        overlay
+                    })
+                    if (overlay) {
+                        overlay.remove();
+                    }
+                }
+            });
+
+        }
+
+        function desactivarEscaneo(indiceEscaneo, idContenedorDatosEscaneos) {
+            const btnEliminar = $('#btn_eliminar_' + indiceEscaneo);
+            const btnRecuperar = $('#btn_recuperar_' + indiceEscaneo);
+            $('#vigencia_escaneo_' + indiceEscaneo).val(0);
+            const contenedorDatosEscaneo = $('#' + idContenedorDatosEscaneos + indiceEscaneo);
+
+            btnRecuperar.removeClass("d-none");
+            btnRecuperar.addClass("elementoVisible");
+
+            btnEliminar.removeClass("elementoVisible");
+            btnEliminar.addClass("elementoOculto");
+
+
+            if (contenedorDatosEscaneo.hasClass("contenedor_datos_escaneos")) {
+                contenedorDatosEscaneo.removeClass("contenedor_datos_escaneos");
+                contenedorDatosEscaneo.addClass("contenedor_datos_escaneos_eliminado");
+            }
+
+            if (contenedorDatosEscaneo.hasClass("contenedor_datos_escaneos_nuevo")) {
+                contenedorDatosEscaneo.removeClass("contenedor_datos_escaneos_nuevo");
+                contenedorDatosEscaneo.addClass("contenedor_datos_escaneos_nuevo_eliminado");
+            }
+
+        }
+
+        function recuperarEscaneado(indiceEscaneo, idContenedorDatosEscaneos) {
+            const btnEliminar = $('#btn_eliminar_' + indiceEscaneo);
+            const btnRecuperar = $('#btn_recuperar_' + indiceEscaneo);
+            $('#vigencia_escaneo_' + indiceEscaneo).val(1);
+
+            const contenedorDatosEscaneo = $('#' + idContenedorDatosEscaneos + indiceEscaneo);
+            btnRecuperar.addClass("elementoOculto");
+            btnRecuperar.removeClass("elementoVisible");
+
+            btnEliminar.removeClass("elementoOculto");
+            btnEliminar.addClass("elementoVisible");
+
+            contenedorDatosEscaneo.removeClass("contenedor_datos_escaneos_eliminado");
+            contenedorDatosEscaneo.addClass("contenedor_datos_escaneos");
+
+            if (contenedorDatosEscaneo.hasClass("contenedor_datos_escaneos_eliminado")) {
+                contenedorDatosEscaneo.removeClass("contenedor_datos_escaneos_eliminado");
+                contenedorDatosEscaneo.addClass("contenedor_datos_escaneos");
+            }
+
+            if (contenedorDatosEscaneo.hasClass("contenedor_datos_escaneos_nuevo_eliminado")) {
+                contenedorDatosEscaneo.removeClass("contenedor_datos_escaneos_nuevo_eliminado");
+                contenedorDatosEscaneo.addClass("contenedor_datos_escaneos_nuevo");
+            }
+
+        }
+
+        function guardarDatosEscaneo() {
+            crearloginPantallaCompleta();
+            $.ajax({
+                url: window.location.href + 'api/v1/empleado_administracion/guardarRegistroDatosEscaneo',
+                type: 'POST',
+                data: {
+                    cod_crew: $('#cod_crew_actual').val(),
+                    datosEscaneados: recopilarDatosEscaneados(),
+                },
+                success: function(response) {
+
+
+                    const data = response;
+                    console.log({
+                        data
+                    });
+                    if (data.success === false) {
+                        Swal.fire("An error occurred while processing",
+                            "Please contact the administrators.", "warning");
+                        return;
+                    }
+                    $('#listado_datos_escaneados').empty();
+                    cantidadEscaneos = 0;
+                    $('#cantidad_escaneos').text(cantidadEscaneos);
+                    $('#formCantidadesEscaneadas').modal('hide');
+
+                    $('#input_cantidad_escaneo_' + $('#id_unico_fila').val()).val(data.data
+                        .cantidad_total_piezas);
+                    $('#btn_cantidad_escaneo_' + $('#id_unico_fila').val()).text(data.data
+                        .cantidad_total_piezas);
+                    Swal.fire("Data saved successfully", "", "success");
+
+                },
+                fail: function(xhr) {
+                    console.error('Error:', xhr.responseText);
+                    const overlay = document.getElementById('global-loading-overlay');
+                    Swal.fire("An error occurred while processing",
+                        "Please contact the administrators.", "warning");
+                    if (overlay) {
+                        overlay.remove();
+                    }
+                },
+                complete: () => {
+                    const overlay = document.getElementById('global-loading-overlay');
+                    console.log({
+                        overlay
+                    })
+                    if (overlay) {
+                        overlay.remove();
+                    }
+                }
+            });
+
+        }
+
+        function abrirModalAgregarComentario(codInicioSesion) {
+
+            var comentarioData = $('#icon_comentario_' + codInicioSesion).data('comentario');
+            var nombreAdmin = $('#icon_comentario_' + codInicioSesion).data('nombre_admin_comentario');
+            var fecha = $('#icon_comentario_' + codInicioSesion).data('fecha_comentario');
+            if (nombreAdmin == 'null' || nombreAdmin == null || nombreAdmin === undefined) {
+                $('#div_datos_comentario').attr('hidden', true);
+            } else {
+                $('#div_datos_comentario').removeAttr('hidden');
+                $('#comentario_autor_nombre').text(nombreAdmin);
+                $('#comentario_fecha_creacion').text(fecha);
+            }
+
+
+            $('#comentario_registro_ingreso').val(comentarioData);
+            $('#id_registro_ingreso').val(codInicioSesion);
+            $('#formularioAgregarComentario').modal('show');
+        }
+
         /**
          * Elimina la tarea actual, se debe pasar el id de la tarea
          */
@@ -336,6 +540,8 @@
                 },
                 error: function(xhr) {
                     console.error('Error:', xhr.responseText);
+                    Swal.fire("An error occurred while processing",
+                        "Please contact the administrators.", "warning");
 
                 }
             });
@@ -389,7 +595,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="btn_save_modal_editar_farm_location">Save</button>
+                    <button type="button" class="btn color_principal" id="btn_save_modal_editar_farm_location">Save</button>
                 </div>
             </div>
         </div>
@@ -465,10 +671,6 @@
         </div>
     </div>
 
-    <!-- Button trigger modal -->
-    {{-- <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#formularioAgregarTarea">
-        Open Modal
-    </button> --}}
 
     <!-- Modal -->
     <div class="modal fade" id="formularioAgregarTarea" tabindex="-1" role="dialog"
@@ -891,6 +1093,88 @@
 
     </div>
 
+    <div class="modal fade" id="formularioAgregarComentario" tabindex="-1" role="dialog"
+        aria-labelledby="modal_seleccionar" aria-hidden="true" data-backdrop="static" data-keyboard="false"
+        data-bs-config={backdrop:true} aria-labelledby="labelModalFormularioAgregarComentario" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="labelModalFormularioAgregarComentario">Comment on the clock-in record</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div hidden id="div_datos_comentario">
+                        <div class="mb-3">
+                            <label class="form-label">Comment by:</label>
+                            <span id="comentario_autor_nombre">Edwin Olivera</span>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Created at:</label>
+                            <span id="comentario_fecha_creacion">Hoy</span>
+                        </div>
+                    </div>
+                    <form>
+                        <input type="hidden" name="id_registro_ingreso" id="id_registro_ingreso" value="0">
+                        <div class="row">
+                            <div class="mb-3 col-md-12">
+                                <label for="comentario_registro_ingreso" class="form-label">Comment</label>
+                                <input type="text" class="form-control" id="comentario_registro_ingreso"
+                                    min="0" value="0">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn color_principal" disabled id="guardar_comentario_en_registro">Save
+                        comment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="formCantidadesEscaneadas" tabindex="-1" role="dialog"
+        aria-labelledby="modal_seleccionar" aria-hidden="true" data-backdrop="static" data-keyboard="false"
+        data-bs-config={backdrop:true} aria-labelledby="labelModalFormularioAgregarTarea" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered" style="max-width: 90%; min-height: 75vh;">
+            <div class="modal-content" style="min-height: 75vh;">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="labelModalFormularioAgregarTarea">Manual scans</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <input type="hidden" name="cod_crew_actual" id="cod_crew_actual" value="0">
+                        <input type="hidden" name="id_unico_fila" id="id_unico_fila" value="0">
+                        <div style="overflow-y: auto; max-height: 62vh;">
+                            <div class="row d-flex justify-content-center mx-0">
+                                <div id="listado_datos_escaneados">
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <h5 class="modal-title me-2">Scanned Quantities:</h5>
+                        <div id="cantidad_escaneos" class="badge bg-secondary" data-bs-toggle="tooltip"
+                            data-bs-placement="top" title="Number of scans">0</div>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="Close the modal">Close</button>
+                        <button type="button" class="btn btn-success" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="Add a new scanned item" onclick="agregarCantidadEscaneada()"
+                            style="max-width: 300px;">Add item</button>
+                        <button type="button" class="btn color_principal" data-bs-dismiss="modal"
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="Save the scanned quantities"
+                            id="guardar_datos_escaneo">Save changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
         $(document).ready(function() {
             $("#cod_farm_nav_izquierdo").on("change", function() {
@@ -929,6 +1213,7 @@
                     }
                 });
             });
+            $("#guardar_datos_escaneo").on("click", guardarDatosEscaneo);
         });
         var cantidadRegistrosFallidos = 0;
         $('#div_fecha_inicial').datetimepicker({
@@ -997,6 +1282,8 @@
                 next: 'fa fa-arrow-right',
             }
         }).on('dp.hide', function(e) {});
+
+
 
         function clicEnTarjetaEmpleado(cod_usuario) {
             $("#cod_usuario").val(cod_usuario);
@@ -1707,7 +1994,9 @@
                                 </tr>`;
                         // Get the pack types
                         let pack_types = JSON.parse(response.data.pack_types);
-
+                        console.log({
+                            pack_types
+                        })
                         let packs_farms_category_assignment = JSON.parse(response.data
                             .packs_farms_category_assignment);
 
@@ -1718,8 +2007,8 @@
                                             <td style="width: 40%; text-align: left !important;">${item["job"]}</td>
                                             <td style="width: 5%;">${item["abreviatura_tipo_pago"]}</td>
                                             <td style="width: 9%;">
-                                                <button class="btnSeleccionables" onclick="activarEdicion('btn_cantidad_escaneo${idUnicoFila}', 'input_cantidad_escaneo${idUnicoFila}')" id="btn_cantidad_escaneo${idUnicoFila}">${item["cantidad_escaneo"]}</button>
-                                                <input class="input_texto" hidden type="number" min="0"  id="input_cantidad_escaneo${idUnicoFila}" onblur="detectarSalirDeInput('btn_cantidad_escaneo${idUnicoFila}', 'input_cantidad_escaneo${idUnicoFila}', '${item["cod_crew"]}')" value="${item["cantidad_escaneo"]}" onkeydown="detectarTeclasDeSalida(event,'btn_cantidad_escaneo${idUnicoFila}', 'input_cantidad_escaneo${idUnicoFila}','${item["cantidad_escaneo"]}')" oninput="detectarDatosEntradaDeTeclados(event,'btn_cantidad_escaneo${idUnicoFila}', 'input_cantidad_escaneo${idUnicoFila}')" placeholder="">
+                                                <button class="btnSeleccionables" onclick="activarEdicion('btn_cantidad_escaneo_${idUnicoFila}', 'input_cantidad_escaneo_${idUnicoFila}')" id="btn_cantidad_escaneo_${idUnicoFila}">${item["cantidad_escaneo"]}</button>
+                                                <input class="input_texto" hidden type="number" min="0"  id="input_cantidad_escaneo_${idUnicoFila}" onblur="detectarSalirDeInput('btn_cantidad_escaneo_${idUnicoFila}', 'input_cantidad_escaneo_${idUnicoFila}', '${item["cod_crew"]}')" value="${item["cantidad_escaneo"]}" onkeydown="detectarTeclasDeSalida(event,'btn_cantidad_escaneo_${idUnicoFila}', 'input_cantidad_escaneo_${idUnicoFila}','${item["cantidad_escaneo"]}')" oninput="detectarDatosEntradaDeTeclados(event,'btn_cantidad_escaneo_${idUnicoFila}', 'input_cantidad_escaneo_${idUnicoFila}')" placeholder="">
                                             </td>
                                             <td style="width: 10%;">
                                                 ${item["cod_tipo_pack"] != undefined ? construirPackTypeSelectHarvest(
@@ -1762,9 +2051,14 @@
                                             </td>
                                             <td style="width: 5%;">
                                                 <div class="row container-fluid justify-content-around">
-                                                    <div class="col-12">
+                                                    <div class="col-6">
                                                         <button class="btn btn-danger" data-toggle="tooltip" title="Delete" onclick="eliminarVinculoConTarea(${item["cod_crew"]}, 'fila_tarea_${item["cod_crew"]}')" style="height: 25px; width: 25px; font-size: 12px; padding:0px;">
                                                             <i class="fas fa-trash-alt"></i>
+                                                        </button>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <button class="btn btn-info" data-toggle="tooltip" title="Scanned Quantities" data-bs-toggle="modal" onclick="abrirModalAgregarCantidad(${item["cod_crew"]}, ${idUnicoFila})" style="height: 25px; width: 25px; font-size: 12px; padding:0px;">
+                                                            <i class="fa-solid fa-barcode"></i>
                                                         </button>
                                                     </div>
                                                 </div>
@@ -1818,13 +2112,20 @@
                     return pca
                 }
             });
-
+            console.log({
+                pca: corresponding_pcas
+            });
             let corresponding_pack_types = pack_types.filter((p) => {
                 let packTypeFound = false;
                 corresponding_pcas.forEach((pca) => {
                     if (pca.cod_tipo_pack == p.cod_tipo_pack) {
                         packTypeFound = true;
                     }
+                });
+
+                console.log({
+                    p: p,
+                    packTypeFound
                 });
                 return packTypeFound;
             });
@@ -1833,6 +2134,9 @@
             let pack_type_select =
                 `<select class="packTypeSelects" onchange="window.cambiarPackTypeActividad(event, ${cod_harvest}, ${current_pack_type_selected})">`;
             pack_type_select += `<option disabled>Select one</option>`
+            console.log({
+                pack_types: corresponding_pack_types
+            });
             corresponding_pack_types.forEach((p) => {
                 let option =
                     `<option value="${p.cod_tipo_pack}" ${current_pack_type_selected != null && current_pack_type_selected == p.cod_tipo_pack ? "selected" : ""}>${p.tipo_pack}</option>`;
@@ -1841,6 +2145,181 @@
             pack_type_select += `</select>`;
             return pack_type_select;
 
+        }
+
+        function agregarCantidadEscaneada() {
+            cantidadEscaneos++;
+            $('#listado_datos_escaneados').append(`
+            <div id="escaneo_${cantidadEscaneos}" style="width: 100%; text-align: right;" class="row display-flex">
+                <div style="float: right; padding: 0px">
+                    <button id="btn_recuperar_${cantidadEscaneos}" type="button" class="d-none btn btn-info btn-sm" style="border-radius: 0;" onclick="recuperarEscaneado(${cantidadEscaneos}, 'contenedor_datos_escaneos_')">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button id="btn_eliminar_${cantidadEscaneos}" type="button" class="btn btn-danger btn-sm" style="border-radius: 0;" onclick="desactivarEscaneo(${cantidadEscaneos}, 'contenedor_datos_escaneos_')">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+                <div id="contenedor_datos_escaneos_${cantidadEscaneos}" class="contenedor_datos_escaneos_nuevo col-12">
+                    <input type="hidden" id="datos_nuevo_escaneo_${cantidadEscaneos}" value="1">
+                    <input type="hidden" id="vigencia_escaneo_${cantidadEscaneos}" value="1">
+                    <input type="time" id="hora_escaneo_${cantidadEscaneos}" class="form-control" style="max-width: 20%;" value="${asignarHoraActual()}" onchange="adjustTimes()">
+                    <input type="text" id="comentario_${cantidadEscaneos}" value="" class="form-control" style="width: 60%;">
+                    <div id="pieza_${cantidadEscaneos}" class="d-flex justify-content-center align-items-center" style="background-color: grey; width: 10%; color: white; height: 100%;">
+                        1
+                    </div>
+                </div>
+            </div>
+            `);
+            $('#cantidad_escaneos').text(cantidadEscaneos);
+            adjustTimes();
+        }
+
+        function asignarHoraActual() {
+            let maxTime = moment("00:00", "HH:mm");
+            $(".contenedor_datos_escaneos, .contenedor_datos_escaneos_nuevo")
+                .find("input[type='time']")
+                .each(function() {
+                    const timeStr = $(this).val();
+                    if (timeStr) {
+                        const current = moment(timeStr, "HH:mm");
+                        if (current.isAfter(maxTime)) {
+                            maxTime = current;
+                        }
+                    }
+                });
+            maxTime.add(5, "minutes");
+            return maxTime.format("HH:mm");
+            // return moment().format('HH:mm');
+        }
+
+        function adjustTimes() {
+            var $inputs = $('.contenedor_datos_escaneos, .contenedor_datos_escaneos_nuevo').find('input[type="time"]');
+            var times = [];
+            // Recorre cada input y asegúrate de que tenga un valor
+            $inputs.each(function() {
+                var t = $(this).val();
+                if (!t) {
+                    t = moment().format("HH:mm");
+                    $(this).val(t);
+                }
+                times.push({
+                    elem: $(this),
+                    time: moment(t, "HH:mm")
+                });
+            });
+
+            // Ordena los inputs según su tiempo
+            times.sort(function(a, b) {
+                return a.time.diff(b.time);
+            });
+
+            let horaAjustada = false;
+            // Recorre y ajusta para que la diferencia entre cada uno sea de al menos 30 segundos
+            for (var i = 1; i < times.length; i++) {
+                var prev = times[i - 1];
+                var curr = times[i];
+                var diff = curr.time.diff(prev.time, 'seconds');
+                if (diff <= 30) {
+                    curr.time = moment(prev.time).add(30, 'seconds');
+                    curr.elem.val(curr.time.format("HH:mm"));
+                    horaAjustada = true;
+
+                }
+            }
+            if (horaAjustada) {
+                if (!$('#ajusteMensaje').length) {
+                    $('body').append(
+                        '<div id="ajusteMensaje" style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(119,221,119,0.6); color: #000000; padding: 8px 12px; border-radius: 4px; font-size: 14px; z-index: 10000; display: none;">The selected times have been adjusted</div>'
+                    );
+                }
+                $('#ajusteMensaje').fadeIn(300).delay(2000).fadeOut(300);
+            }
+        }
+
+        function recopilarDatosEscaneados() {
+            // Crear un array para almacenar los datos
+            var datosEscaneadosArray = [];
+
+            // Iterar sobre cada contenedor de datos escaneados nuevo
+            $('.contenedor_datos_escaneos_nuevo').each(function() {
+                // Buscar y obtener los valores correspondientes
+                var vigencia = $(this).find('[id^="vigencia_escaneo_"]').val();
+                if (vigencia == 1) {
+                    var datosnNuevo = $(this).find('[id^="datos_nuevo_escaneo_"]').val();
+
+                    var hora = $(this).find('[id^="hora_escaneo_"]').val();
+                    var comentario = $(this).find('[id^="comentario_"]').val();
+                    var pieza = $(this).find('[id^="pieza_"]').text().trim();
+                    datosEscaneadosArray.push({
+                        nuevo: datosnNuevo,
+                        hora: hora,
+                        comentario: comentario,
+                        pieza: pieza,
+                        vigencia: vigencia,
+                    });
+                }
+
+            });
+            // Iterar sobre cada contenedor de datos escaneados viejos
+            $('.contenedor_datos_escaneos').each(function() {
+                // Buscar y obtener los valores correspondientes
+                var datosnNuevo = $(this).find('[id^="datos_nuevo_escaneo_"]').val();
+                var vigencia = $(this).find('[id^="vigencia_escaneo_"]').val();
+                var hora = $(this).find('[id^="hora_escaneo_"]').val();
+                var comentario = $(this).find('[id^="comentario_"]').val();
+                var pieza = $(this).find('[id^="pieza_"]').text().trim();
+                var cod_lista = $(this).find('[id^="datos_existento_"]').val();
+
+                // Crear un objeto con los valores extraídos y almacenarlo en el array
+                datosEscaneadosArray.push({
+                    nuevo: datosnNuevo,
+                    hora: hora,
+                    comentario: comentario,
+                    pieza: pieza,
+                    cod_lista: cod_lista,
+                    vigencia: vigencia,
+                });
+            });
+            // Iterar sobre cada contenedor de datos escaneados desactivados (tanto eliminados como nuevos eliminados)
+            $('.contenedor_datos_escaneos_eliminado, .contenedor_datos_escaneos_nuevo_eliminado').each(function() {
+                var datosnNuevo = $(this).find('[id^="datos_nuevo_escaneo_"]').val();
+                var vigencia = $(this).find('[id^="vigencia_escaneo_"]').val();
+                var hora = $(this).find('[id^="hora_escaneo_"]').val();
+                var comentario = $(this).find('[id^="comentario_"]').val();
+                var pieza = $(this).find('[id^="pieza_"]').text().trim();
+                var cod_lista = $(this).find('[id^="datos_existento_"]').val();
+
+                datosEscaneadosArray.push({
+                    nuevo: datosnNuevo,
+                    hora: hora,
+                    comentario: comentario,
+                    pieza: pieza,
+                    cod_lista: cod_lista,
+                    vigencia: vigencia,
+                });
+            });
+            console.log({
+                datosEscaneadosArray
+            });
+            return datosEscaneadosArray;
+        }
+
+        function crearloginPantallaCompleta() {
+            const loadingOverlay = document.createElement('div');
+            loadingOverlay.id = 'global-loading-overlay';
+            loadingOverlay.style.position = 'fixed';
+            loadingOverlay.style.top = '0';
+            loadingOverlay.style.left = '0';
+            loadingOverlay.style.width = '100vw';
+            loadingOverlay.style.height = '100vh';
+            loadingOverlay.style.background = 'rgba(255,255,255,0.7)';
+            loadingOverlay.style.zIndex = '9999';
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.style.alignItems = 'center';
+            loadingOverlay.style.justifyContent = 'center';
+            loadingOverlay.innerHTML =
+                `<div class="spinner-border text-primary" style="width: 4rem; height: 4rem;" role="status"><span class="sr-only">Saving scan data...</span></div>`;
+            document.body.appendChild(loadingOverlay);
         }
     </script>
     @vite(['resources/js/app.js'])

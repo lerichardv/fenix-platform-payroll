@@ -513,4 +513,38 @@ class TareaProgramadaAPIController extends Controller
             ->get();
         return $tipoPacks;
     }
+
+    public function eliminarDatos()
+    {
+       return $this->resetearAutoIncrementAll();
+        // $ultimoIndice = DB::table('bw_plantaciones_bitacora')->max('cod_bitacora');
+
+        // $indiceActual = 1;
+        // do {
+        //     DB::table('bw_plantaciones_bitacora')
+        //         ->where('cod_bitacora', $indiceActual)
+        //         ->delete();
+        //     $indiceActual++;
+        // } while ($indiceActual <= $ultimoIndice);
+
+        // return response()->json(['message' => 'Datos eliminados exitosamente', 'cantidad_eliminada' => $ultimoIndice], 200);
+    }
+
+    public function resetearAutoIncrementAll()
+    {
+        $dbName = config('database.connections.mysql.database');
+        $tables = DB::select('SHOW TABLES');
+        $resetCount = 0;
+
+        foreach ($tables as $table) {
+            $tableName = array_values((array)$table)[0];
+            DB::statement("ALTER TABLE `{$dbName}`.`{$tableName}` AUTO_INCREMENT = 1;");
+            $resetCount++;
+        }
+
+        return response()->json([
+            'message' => 'Se ha reiniciado el AUTO_INCREMENT de todas las tablas',
+            'tables_reset' => $resetCount
+        ], 200);
+    }
 }

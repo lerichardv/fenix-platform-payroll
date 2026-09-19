@@ -141,12 +141,6 @@
                     <div class="col-2 px-2 py-2">
                         <small>Commodity</small>
                     </div>
-                    {{-- <div class="col-1 px-2 py-2">
-                        <small>Variety</small>
-                    </div>
-                    <div class="col-1 px-2 py-2">
-                        <small>Age</small>
-                    </div> --}}
                     <div class="col-2 px-2 py-2">
                         <small>Field</small>
                     </div>

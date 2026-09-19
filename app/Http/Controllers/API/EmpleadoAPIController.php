@@ -214,7 +214,7 @@ class EmpleadoAPIController extends Controller
         $cod_supervisor = $body['cod_supervisor'];
         $latitud = $body['latitud'];
         $longitud = $body['longitud'];
-        $hora_actual = $body['hora_actual'];
+        $hora_actual = $body['hora_actual']?? date('H:i:s');
         if (!is_array($cod_usuarios)) {
             $cod_usuarios = explode(',', $cod_usuarios);
         }

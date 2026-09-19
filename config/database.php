@@ -52,12 +52,11 @@ return [
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'strict' => false,
+            'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
-               // PDO::ATTR_PERSISTENT => true, // Habilitar conexiones persistentes
-                PDO::ATTR_TIMEOUT => 300, // Tiempo de espera de la conexión. Calculado en segundos
+                PDO::ATTR_PERSISTENT => true, // Habilitar conexiones persistentes
             ]) : [],
         ],
 
@@ -74,7 +73,7 @@ return [
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'strict' => false,
+            'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),

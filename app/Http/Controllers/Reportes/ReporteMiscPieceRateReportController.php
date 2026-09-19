@@ -14,18 +14,19 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ReporteMiscPieceRateReportController extends Controller
 {
-    public function index(){
+    public function index()
+    {
 
         return view('admin.reportes.reporte_misc_piece_rate_report')
             ->with('listaGranjas', Granja::todasLasActivas());
     }
 
-    public function obtenerMiscRateReportData(Request $request){
+    public function obtenerMiscRateReportData(Request $request)
+    {
 
         $codEmpleados = $request->input('employees', []);
         $initial_date = $request->input('start_date');
         $final_date = $request->input('end_date');
-        // $cropIds = $request->input('crop_ids', []); // Crop IDs
         $farmIds = $request->input('farm_ids', []); // Farm IDs
 
         $results = $this->generarMiscPieceRateReportData(
@@ -33,14 +34,12 @@ class ReporteMiscPieceRateReportController extends Controller
             $initial_date,
             $final_date,
             $farmIds
-            // $cropIds
         );
 
         return response()->json([
             "success" => true,
             "data" => $results
         ]);
-
     }
 
     public function generarMiscPieceRateReportData(
@@ -48,8 +47,7 @@ class ReporteMiscPieceRateReportController extends Controller
         $initial_date,
         $final_date,
         $farmIds
-        // $cropIds
-    ){
+    ) {
 
         if ($initial_date != "" && $final_date != "") {
             $initial_date = Carbon::createFromFormat('m-d-Y', $initial_date)->format('Y-m-d');
@@ -60,22 +58,13 @@ class ReporteMiscPieceRateReportController extends Controller
         DB::statement('SET SQL_BIG_SELECTS=1');
 
         $results = DB::table('pay_jobs_progresos')
-
-            // ->join('pay_crews', 'pay_crews.cod_harvest', '=', 'pay_jobs_progresos.cod_harvest')
-            // ->join('pay_lista_empleados_jobs', 'pay_lista_empleados_jobs.cod_crew', '=', 'pay_crews.cod_crew')
-            // ->join('pay_harvests', 'pay_harvests.cod_harvest', '=', 'pay_jobs_progresos.cod_harvest')
-            // ->join('far_farms', 'far_farms.cod_farms', '=', 'pay_harvests.cod_farm')
-            // ->join('usu_usuarios', 'pay_crews.cod_empleado', '=', 'usu_usuarios.cod_usuario')
-
             ->join('pay_crews', 'pay_crews.cod_miscellaneous', '=', 'pay_jobs_progresos.cod_miscellaneous')
             ->join('pay_lista_empleados_jobs', 'pay_lista_empleados_jobs.cod_crew', '=', 'pay_crews.cod_crew')
             ->join('pay_miscellaneous', 'pay_miscellaneous.cod_miscellaneous', '=', 'pay_jobs_progresos.cod_miscellaneous')
             ->join('far_farms', 'far_farms.cod_farms', '=', 'pay_miscellaneous.cod_farm')
-            // ->join('far_locations', 'far_locations.cod_location', '=', 'pay_miscellaneous.cod_location')
             ->join('usu_usuarios', 'pay_crews.cod_empleado', '=', 'usu_usuarios.cod_usuario')
             ->join('usu_usuarios as supervisor', 'pay_crews.cod_supervisor', '=', 'supervisor.cod_usuario')
             ->leftJoin('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_semilla_bloque', '=', 'pay_miscellaneous.crop_age')
-            // ->leftJoin('far_crop_bloques_implementados', 'far_crop_bloques_implementados.cod_bloque_implementado', '=', 'far_crop_semillas_bloques.cod_bloque_implementado')
             ->leftJoin('bw_inventario_semilla', 'bw_inventario_semilla.cod_inventario', '=', 'far_crop_semillas_bloques.cod_semilla')
             ->leftJoin('far_locations', 'far_locations.cod_location', '=', 'pay_miscellaneous.cod_location')
             ->leftJoin('pay_miscelaneos_blocks', 'pay_miscelaneos_blocks.cod_miscelaneos', '=', 'pay_miscellaneous.cod_miscellaneous')
@@ -84,7 +73,6 @@ class ReporteMiscPieceRateReportController extends Controller
             ->leftJoin('far_fields', 'far_fields.cod_field', '=', 'pay_miscelaneos_fields.cod_field')
             ->leftJoin('pay_activities', 'pay_activities.cod_activity', '=', 'pay_miscellaneous.cod_activity')
             ->leftJoin('pay_tipo_pagos', 'pay_tipo_pagos.cod_tipo_pago', '=', 'pay_miscellaneous.cod_tipo_pago')
-            // ->leftJoin('pay_tipo_packs', 'pay_harvests.cod_tipo_pack', '=', 'pay_tipo_packs.cod_tipo_pack')
             ->leftJoin('bw_inventario_plantaciones', 'far_crop_semillas_bloques.cod_plantacion', '=', 'bw_inventario_plantaciones.cod_plantacion')
             ->leftJoin('bw_inventario_categorias_semillas', 'bw_inventario_semilla.cod_categoria', '=', 'bw_inventario_categorias_semillas.cod_categoria')
             ->select(
@@ -117,14 +105,10 @@ class ReporteMiscPieceRateReportController extends Controller
                 'bw_inventario_semilla.codigo_semilla',
                 DB::raw('SUM(pay_lista_empleados_jobs.pieces) AS cantidad_escaneo'),
                 'pay_miscellaneous.cod_miscellaneous',
-                // 'far_crop_semillas_bloques.cod_semilla_bloque',
                 DB::raw("COALESCE(
                     CONCAT(GROUP_CONCAT(DISTINCT far_bloques.bloque SEPARATOR ' - '), ' ', GROUP_CONCAT(DISTINCT far_fields.field SEPARATOR ' - '), ' M.', ', ',DATE_FORMAT(pay_jobs_progresos.hora_inicio, '%h:%i %p'), ' - ',DATE_FORMAT(pay_jobs_progresos.hora_final, '%h:%i %p')),
                     CONCAT(far_locations.location,' ',pay_activities.activity, ' ', ' M.', ', ',DATE_FORMAT(pay_jobs_progresos.hora_inicio, '%h:%i %p'), ' - ',DATE_FORMAT(pay_jobs_progresos.hora_final, '%h:%i %p'))) AS job"),
                 'pay_tipo_pagos.tipo_pago',
-                // 'pay_tipo_pagos.abreviatura',
-                // 'pay_tipo_packs.cod_tipo_pack',
-                // 'pay_tipo_packs.tipo_pack',
                 'far_fields.field',
                 'far_bloques.bloque',
                 'far_bloques.acres',
@@ -140,9 +124,6 @@ class ReporteMiscPieceRateReportController extends Controller
             ->when(count($codEmpleados) > 0, function ($query) use ($codEmpleados) {
                 $query->whereIn('pay_crews.cod_empleado', $codEmpleados);
             })
-            // ->when(count($cropIds) > 0, function ($query) use ($cropIds) {
-            //     $query->whereIn('bw_inventario_semilla.cod_inventario', $cropIds);
-            // })
             ->when(count($farmIds) > 0, function ($query) use ($farmIds) {
                 $query->whereIn('pay_miscellaneous.cod_farm', $farmIds);
             })
@@ -170,27 +151,42 @@ class ReporteMiscPieceRateReportController extends Controller
             ->get()
             ->keyBy('cod_crew');
 
+
+
+
         $acresResults = DB::table('far_crop_semillas_bloques')
+            ->select('far_crop_semillas_bloques.cod_semilla', 'bw_inventario_plantaciones.edad', 'far_crop_bloques_implementados.cod_farm', DB::raw('sum(far_crop_semillas_bloques.acres_usados) as suma_acres_usados'))
             ->join('far_crop_bloques_implementados', 'far_crop_bloques_implementados.cod_bloque_implementado', '=', 'far_crop_semillas_bloques.cod_bloque_implementado')
             ->join('bw_inventario_plantaciones', 'bw_inventario_plantaciones.cod_plantacion', '=', 'far_crop_semillas_bloques.cod_plantacion')
-            ->select('far_crop_semillas_bloques.cod_semilla', 'bw_inventario_plantaciones.edad', 'far_crop_bloques_implementados.cod_farm', DB::raw('sum(far_crop_semillas_bloques.acres_usados) as suma_acres_usados'))
             ->whereIn('far_crop_semillas_bloques.cod_semilla', $results->pluck('codigo_semilla')->toArray())
             ->whereIn('far_crop_bloques_implementados.cod_farm', $results->pluck('cod_farms')->toArray())
             ->where('far_crop_semillas_bloques.completada', 0)
             ->groupBy('far_crop_semillas_bloques.cod_semilla', 'bw_inventario_plantaciones.edad', 'far_crop_bloques_implementados.cod_farm')
             ->get()
             ->keyBy(function ($item) {
-            return $item->cod_semilla . '-' . $item->edad . '-' . $item->cod_farm;
+                return $item->cod_semilla . '-' . $item->edad . '-' . $item->cod_farm;
             });
+
+        $miscellaneousAcres = DB::table('pay_miscelaneos_blocks AS mis_block')
+            ->select(
+                'mis_block.cod_miscelaneos',
+                DB::raw('SUM(far_block.acres) AS suma_acres_usados')
+            )
+            ->join('far_bloques AS far_block', 'far_block.cod_bloque', '=', 'mis_block.cod_block')
+            ->whereIn('mis_block.cod_miscelaneos', $results->pluck('cod_miscellaneous')->toArray())
+            ->groupBy('mis_block.cod_miscelaneos')
+            ->get()
+            ->keyBy('cod_miscelaneos');
+
 
         foreach ($results as $registroMisc) {
             $registroMisc->units = $escaneoTotales[$registroMisc->cod_crew]->units ?? 0;
             $registroMisc->units_original = $escaneosOriginales[$registroMisc->cod_crew]->units_original ?? 0;
             $key = $registroMisc->codigo_semilla . '-' . $registroMisc->edad . '-' . $registroMisc->cod_farms;
-            $registroMisc->acreage = $acresResults[$key]->suma_acres_usados ?? 0;
+            $registroMisc->acreage = $acresResults[$key]->suma_acres_usados ?? $miscellaneousAcres[$registroMisc->cod_miscellaneous]->suma_acres_usados ?? 0;
         }
 
-        foreach($results as $result){
+        foreach ($results as $result) {
             $result->pwhr = $result->diff_in_milliseconds >= 0
                 ? number_format($this->milisegundosAHoras($result->diff_in_milliseconds), 2)
                 : 0;
@@ -202,10 +198,10 @@ class ReporteMiscPieceRateReportController extends Controller
         }
 
         return $results;
-
     }
 
-    public function searchEmpleadosPorGranjaMisc(Request $request){
+    public function searchEmpleadosPorGranjaMisc(Request $request)
+    {
 
         // $query = $request->input('query') ?? "";
         $fecha_inicial = $request->input('fecha_inicial') ?? "";
@@ -225,12 +221,9 @@ class ReporteMiscPieceRateReportController extends Controller
         $empleados = DB::table('pay_jobs_progresos')
             ->join('pay_crews', 'pay_crews.cod_miscellaneous', '=', 'pay_jobs_progresos.cod_miscellaneous')
             ->join('pay_lista_empleados_jobs', 'pay_lista_empleados_jobs.cod_crew', '=', 'pay_crews.cod_crew')
-            // ->join('pay_harvests', 'pay_harvests.cod_harvest', '=', 'pay_jobs_progresos.cod_harvest')
             ->join('pay_miscellaneous', 'pay_miscellaneous.cod_miscellaneous', '=', 'pay_jobs_progresos.cod_miscellaneous')
             ->join('far_farms', 'far_farms.cod_farms', '=', 'pay_miscellaneous.cod_farm')
             ->join('usu_usuarios', 'pay_crews.cod_empleado', '=', 'usu_usuarios.cod_usuario')
-            // ->leftJoin('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_semilla_bloque', '=', 'pay_harvests.crop_age')
-            // ->leftJoin('bw_inventario_semilla', 'bw_inventario_semilla.cod_inventario', '=', 'far_crop_semillas_bloques.cod_semilla')
             ->select([
                 'usu_usuarios.cod_usuario',
                 'usu_usuarios.pin',
@@ -241,23 +234,6 @@ class ReporteMiscPieceRateReportController extends Controller
                 DB::raw("CONCAT(usu_usuarios.nombre_1, ' ', usu_usuarios.apellido_1) AS nombre_empleado")
             ]);
 
-            // $empleados = DB::table('pay_jobs_progresos')
-            //     ->join('pay_crews', 'pay_crews.cod_harvest', '=', 'pay_jobs_progresos.cod_harvest')
-            //     ->join('pay_lista_empleados_jobs', 'pay_lista_empleados_jobs.cod_crew', '=', 'pay_crews.cod_crew')
-            //     ->join('pay_harvests', 'pay_harvests.cod_harvest', '=', 'pay_jobs_progresos.cod_harvest')
-            //     ->join('far_farms', 'far_farms.cod_farms', '=', 'pay_harvests.cod_farm')
-            //     ->join('usu_usuarios', 'pay_crews.cod_empleado', '=', 'usu_usuarios.cod_usuario')
-            //     ->leftJoin('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_semilla_bloque', '=', 'pay_harvests.crop_age')
-            //     ->leftJoin('bw_inventario_semilla', 'bw_inventario_semilla.cod_inventario', '=', 'far_crop_semillas_bloques.cod_semilla')
-            //     ->select([
-            //         'usu_usuarios.cod_usuario',
-            //         'usu_usuarios.pin',
-            //         'usu_usuarios.qcpin',
-            //         'usu_usuarios.nombre_1',
-            //         'usu_usuarios.apellido_1',
-            //         'usu_usuarios.es_veterano',
-            //         DB::raw("CONCAT(usu_usuarios.nombre_1, ' ', usu_usuarios.apellido_1) AS nombre_empleado")
-            //     ]);
 
         // Filtrar por fecha si se proporciona
         if ($fecha_inicial && $fecha_final) {
@@ -269,20 +245,7 @@ class ReporteMiscPieceRateReportController extends Controller
             $empleados->whereIn('far_farms.cod_farms', $cod_granja);
         }
 
-        // Filtrar por cultivos si hay valores en la lista
-        // if (!empty($cod_crop)) {
-        //     $empleados->whereIn('bw_inventario_semilla.cod_inventario', $cod_crop);
-        // }
 
-        // Aplicar un filtro de búsqueda general si se proporciona
-        // if (!empty($query)) {
-        //     $empleados = $empleados->where(function ($q) use ($query) {
-        //         $q->where('usu_usuarios.nombre_1', 'like', "%{$query}%")
-        //         ->orWhere('usu_usuarios.apellido_1', 'like', "%{$query}%")
-        //         ->orWhere('far_farms.farm', 'like', "%{$query}%")
-        //         ->orWhere('bw_inventario_semilla.nombre_semilla', 'like', "%{$query}%");
-        //     });
-        // }
 
         $result = $empleados->groupBy([
             'usu_usuarios.cod_usuario',
@@ -302,7 +265,8 @@ class ReporteMiscPieceRateReportController extends Controller
         ]);
     }
 
-    public function exportMiscPieceRateFile(Request $request){
+    public function exportMiscPieceRateFile(Request $request)
+    {
 
         // ini_set('max_execution_time', '300');
         // ini_set('max_input_vars', '5000');
@@ -316,10 +280,10 @@ class ReporteMiscPieceRateReportController extends Controller
         $format = $request->input('format');
 
         $filename = "piece_rate_report_"
-            . Carbon::createFromFormat('m-d-Y', $initial_date)->format('Y-m-d')."_"
+            . Carbon::createFromFormat('m-d-Y', $initial_date)->format('Y-m-d') . "_"
             . Carbon::createFromFormat('m-d-Y', $final_date)->format('Y-m-d');
 
-        switch($format){
+        switch ($format) {
             case 'xlsx':
                 return Excel::download(
                     new MiscPieceRateReportExcel(
@@ -329,43 +293,45 @@ class ReporteMiscPieceRateReportController extends Controller
                         $farms
                         // $crops
                     ),
-                    $filename.'.xlsx',
+                    $filename . '.xlsx',
                     null,
                     [
                         'Content-Type' => 'application/octet-stream',
                         'Content-Disposition' => 'attachment; filename="' . $filename . '.xlsx"',
                     ]
                 );
-            // case 'csv':
-            //     // Establecer las cabeceras para la descarga del archivo
-            //     return Excel::download(
-            //         new PieceRateReportCsv(
-            //             $employees,
-            //             $initial_date,
-            //             $final_date,
-            //             $farms,
-            //             $crops
-            //         ),
-            //         $filename.'.csv',
-            //         \Maatwebsite\Excel\Excel::CSV,
-            //         [
-            //             'Content-Type' => 'application/octet-stream',
-            //             'Content-Disposition' => 'attachment; filename="' . $filename . '.csv"',
-            //         ]
-            //     );
+                // case 'csv':
+                //     // Establecer las cabeceras para la descarga del archivo
+                //     return Excel::download(
+                //         new PieceRateReportCsv(
+                //             $employees,
+                //             $initial_date,
+                //             $final_date,
+                //             $farms,
+                //             $crops
+                //         ),
+                //         $filename.'.csv',
+                //         \Maatwebsite\Excel\Excel::CSV,
+                //         [
+                //             'Content-Type' => 'application/octet-stream',
+                //             'Content-Disposition' => 'attachment; filename="' . $filename . '.csv"',
+                //         ]
+                //     );
             default:
                 return response('Invalid format');
         }
     }
 
-    function milisegundosAHoras($milisegundos): float {
+    function milisegundosAHoras($milisegundos): float
+    {
         // Convertir milisegundos a horas
         $horas = $milisegundos / 3600000; // 3600000 milisegundos = 1 hora
 
         return $horas;
     }
 
-    function convertirMilisegundosAFormato($milisegundos) {
+    function convertirMilisegundosAFormato($milisegundos)
+    {
         // Convertir milisegundos a segundos
         $segundos_totales = $milisegundos / 1000;
 

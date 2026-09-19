@@ -113,7 +113,10 @@ class TareasController extends Controller
                 ->whereDate('date_insert', '=', date('Y-m-d'))
                 ->first();
 
+
             if ($cantidadMiscelaneos->cantidad_miscelaneos > 0) {
+
+                //TODO: Mejorar la consulta
                 $tareasCompletasMiscenlaneas = DB::table('pay_jobs_progresos')
                     ->select(
                         'pay_jobs_progresos.cod_job',
@@ -233,7 +236,11 @@ class TareasController extends Controller
                     if (isset($tarea->nombre_semilla)) {
                         $tarea->texto_principal = $campos[0]->campos . ' / ' . $bloques[0]->bloques . ' / ' . $tarea->activity . ' / ' . $tarea->nombre_semilla;
                     } else {
-                        $tarea->texto_principal = $tarea->activity;
+                        if (isset($campos[0]->campos) && isset($bloques[0]->bloques)) {
+                            $tarea->texto_principal = $campos[0]->campos . ' / ' . $bloques[0]->bloques . ' / ' . $tarea->activity;
+                        } else {
+                            $tarea->texto_principal = $tarea->activity;
+                        }
                     }
                     $tarea->texto_secundario = "M " . $tarea->location . ' - ' . $tarea->abreviatura_pago . ' - ' . $tarea->farm;
                 }
@@ -248,6 +255,7 @@ class TareasController extends Controller
                 ->whereDate('date_insert', '=', date('Y-m-d'))
                 ->first();
             if ($cantidadHarvest->cantidad_harvest > 0) {
+                //TODO: Mejorar la consulta
                 $tareasHarvest = DB::table('pay_harvests')
                     ->select(
                         'pay_harvests.cod_harvest',
@@ -665,6 +673,8 @@ class TareasController extends Controller
         $cod_crew = $body['cod_crew'] ?? 0;
         $user_insert = $body['user_insert'];
         $cod_empleado = $body['cod_empleado'] ?? 0;
+        $hora_escaneo = $body['hora_escaneo'] ?? date('Y-m-d H:i:s');
+
         $resultadoActualizar = false;
 
         if ($id_harvest != "0") {
@@ -685,7 +695,8 @@ class TareasController extends Controller
                 $longitud,
                 $cod_crew,
                 $user_insert,
-                1
+                1,
+                $hora_escaneo
             );
         } else if ($id_miscelano != "0") {
             $crewData = DB::table('pay_crews')
@@ -704,7 +715,8 @@ class TareasController extends Controller
                 $longitud,
                 $cod_crew,
                 $user_insert,
-                1
+                1,
+                $hora_escaneo
             );
         }
         if ($resultadoActualizar == 0) {
@@ -737,6 +749,7 @@ class TareasController extends Controller
         $user_insert = $body['user_insert'];
         $cod_empleado = $body['cod_empleado'] ?? 0;
         $cantidad_pendiente = $body['cantidad_pendiente'] ?? 1;
+        $hora_escaneo = $body['hora_escaneo'] ?? date('Y-m-d H:i:s');
         $resultadoActualizar = false;
 
         if ($id_harvest != "0") {
@@ -758,6 +771,7 @@ class TareasController extends Controller
                 $cod_crew,
                 $user_insert,
                 $cantidad_pendiente,
+                $hora_escaneo,
             );
         } else if ($id_miscelano != "0") {
             $crewData = DB::table('pay_crews')
@@ -777,6 +791,7 @@ class TareasController extends Controller
                 $cod_crew,
                 $user_insert,
                 $cantidad_pendiente,
+                $hora_escaneo,
             );
         }
         if ($resultadoActualizar == 0) {
@@ -805,6 +820,7 @@ class TareasController extends Controller
         string $cod_crew,
         string $user_insert,
         int $cantidad_pendiente,
+        string $hora_escaneo,
     ) {
         $resultadoActualizarCantidad  = -1;
         $estadoJob = DB::table('pay_lista_empleados_jobs')
@@ -849,6 +865,7 @@ class TareasController extends Controller
                     'cod_crew' => $cod_crew,
                     'GPS' => $latitud . ',' . $longitud,
                     'user_insert' => $user_insert,
+                    'hora_escaneo' => $hora_escaneo,
                     'date_insert' => $currentDate
                 ]) && DB::table('pay_bitacora_escaneos_realizados')->insert([
                     'cod_estado_job' => $cod_estado_job,
@@ -883,6 +900,7 @@ class TareasController extends Controller
         string $cod_crew,
         string $user_insert,
         int $cantidad_pendiente,
+        string $hora_escaneo,
     ) {
         $resultadoActualizarCantidad  = -1;
         $estadoJob = DB::table('pay_lista_empleados_jobs')
@@ -928,6 +946,7 @@ class TareasController extends Controller
                     'cod_crew' => $cod_crew,
                     'GPS' => $latitud . ',' . $longitud,
                     'user_insert' => $user_insert,
+                    'hora_escaneo' => $hora_escaneo,
                     'date_insert' => $currentDate
                 ]) &&
                     DB::table('pay_bitacora_escaneos_realizados')->insert([

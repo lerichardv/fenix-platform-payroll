@@ -13,12 +13,21 @@ use App\Http\Exports\DynamicReportExport;
 
 class ReporteDynamicReportController extends Controller
 {
-    public function index(){
+    public function index()
+    {
+        session_start();
+        $configuraciones = DB::table('pay_config_reports')
+            ->select('cod_usuario', 'numero_configuracion', 'cod_reporte', 'comentario')
+            ->where('cod_usuario', $_SESSION['cod_usuario'] ?? 1)
+            ->get()
+            ->keyBy('numero_configuracion');
         return view('admin.reportes.reporte_dynamic')
-            ->with('listaGranjas', Granja::todasLasActivas());
+            ->with('listaGranjas', Granja::todasLasActivas())
+            ->with('listaConfiguraciones', $configuraciones);
     }
 
-    public function obtenerDynamicReportData(Request $request){
+    public function obtenerDynamicReportData(Request $request)
+    {
 
         $fecha_inicial = $request->input('fecha_inicial') ?? "";
         $fecha_final = $request->input('fecha_final') ?? "";
@@ -59,7 +68,232 @@ class ReporteDynamicReportController extends Controller
             "success" => true,
             "data" => $results
         ]);
+    }
+    public function guardarConfiguracionReporte(Request $request)
+    {
 
+        session_start();
+        $fecha_inicial = $request->input('fecha_inicial') ?? "";
+        $fecha_final = $request->input('fecha_final') ?? "";
+
+        $cod_granja = json_decode($request->input('cod_farm')) ?? [];
+        $cod_location = json_decode($request->input('cod_location')) ?? [];
+        $cod_categories = json_decode($request->input('cod_category')) ?? [];
+        $empleados = json_decode($request->input('empleados')) ?? [];
+        $columns = json_decode($request->input('columns')) ?? [
+            'usu_usuarios.cod_usuario',
+            "CONCAT(usu_usuarios.nombre_1, ' ', usu_usuarios.apellido_1) AS nombre_completo",
+            'usu_usuarios.email',
+            'usu_usuarios.identidad',
+            'usu_usuarios.telefono_1',
+            'usu_tipo_usuario.cod_tipo_usuario',
+            'usu_tipo_usuario.etiqueta_english AS tipo_usuario',
+            "IF(usu_usuarios.es_veterano = 0, 'Standard', IF(usu_usuarios.es_veterano = 1, 'Veteran', 'H2A')) AS categoria",
+            'usu_usuarios.pin',
+            'usu_usuarios.qcpin'
+        ];
+        $group_by = json_decode($request->input('group_by')) ?? [
+            'usu_usuarios.cod_usuario'
+        ];
+        $cod_config = $request->input('cod_config') ?? 1;
+        $nota_configuracion = $request->input('nota_configuracion') ?? "";
+        $cod_reporte = $request->input('cod_reporte') ?? 1;
+
+        $jsonConfiguracion = [
+            "fecha_inicial" => $fecha_inicial,
+            "fecha_final" => $fecha_final,
+            "cod_farm" => $cod_granja,
+            "cod_location" => $cod_location,
+            "cod_category" => $cod_categories,
+            "empleados" => $empleados,
+            "columns" => $columns,
+            "group_by" => $group_by,
+            "cod_config" => $cod_config,
+            "nota_configuracion" => $nota_configuracion,
+            "cod_usuario" => $_SESSION['cod_usuario'] ?? 1
+        ];
+
+        // Verificar si ya existe una configuración con el mismo numero_configuracion y cod_reporte para el usuario
+        $existingConfig = DB::table('pay_config_reports')
+            ->where('cod_usuario', $jsonConfiguracion['cod_usuario'])
+            ->where('numero_configuracion', $cod_config)
+            ->where('cod_reporte', $cod_reporte)
+            ->first();
+
+        if ($existingConfig) {
+            // Actualizar el registro existente
+            $saveStatus = DB::table('pay_config_reports')
+                ->where('cod_usuario', $jsonConfiguracion['cod_usuario'])
+                ->where('numero_configuracion', $cod_config)
+                ->where('cod_reporte', $cod_reporte)
+                ->update([
+                    'comentario' => $nota_configuracion,
+                    'config_json' => json_encode($jsonConfiguracion),
+                    'user_insert' => $jsonConfiguracion['cod_usuario'],
+                    'updated_at' => Carbon::now()->format('Y-m-d H:i:s')
+                ]);
+        } else {
+            // Insertar nuevo registro
+            $saveStatus = DB::table('pay_config_reports')->insert([
+                'cod_usuario' => $jsonConfiguracion['cod_usuario'],
+                'numero_configuracion' => $cod_config,
+                'cod_reporte' => $cod_reporte,
+                'comentario' => $nota_configuracion,
+                'config_json' => json_encode($jsonConfiguracion),
+                'user_insert' => $jsonConfiguracion['cod_usuario'],
+            ]);
+        }
+
+        if (!$saveStatus) {
+            return response()->json([
+                "success" => false,
+                "message" => "Could not save the report configuration.",
+                "title" => "Error."
+            ], 500);
+        }
+
+        Log::info(json_encode($empleados));
+
+        $results = $this->generarDynamicReportData(
+            $fecha_inicial,
+            $fecha_final,
+            $cod_granja,
+            $cod_location,
+            $cod_categories,
+            $this->pluckIdEmpleados($empleados),
+            $columns,
+            $group_by
+        );
+
+        return response()->json([
+            "success" => true,
+            "message" => "Report configuration saved successfully.",
+            "title" => "Success",
+            "data" => $results,
+            "jsonConfiguracion" => $jsonConfiguracion
+        ]);
+    }
+    public function buscarConfiguracionReporte(Request $request)
+    {
+
+        session_start();
+        $cod_config = $request->input('cod_config') ?? 1;
+        $cod_reporte = $request->input('cod_reporte') ?? 1;
+        $cod_config = str_replace("config_", "", $cod_config);
+        $config = DB::table('pay_config_reports')
+            ->select('cod_usuario', 'numero_configuracion', 'cod_reporte', 'comentario', 'config_json')
+            ->where('cod_usuario', $_SESSION['cod_usuario'] ?? 1)
+            ->where('numero_configuracion', $cod_config)
+            ->where('cod_reporte', $cod_reporte)
+            ->first();
+        if (!$config) {
+            return response()->json([
+                "success" => false,
+                "message" => "The requested configuration was not found.",
+                "title" => "Error"
+            ], 404);
+        }
+
+        if ($config && $config->config_json) {
+            $configData = json_decode($config->config_json, true);
+
+            $fecha_inicial = $configData['fecha_inicial'] ?? "";
+            $fecha_final = $configData['fecha_final'] ?? "";
+            $cod_granja = $configData['cod_farm'] ?? [];
+            $cod_location = $configData['cod_location'] ?? [];
+            $cod_categories = $configData['cod_category'] ?? [];
+            $empleados = $configData['empleados'] ?? [];
+            $columns = $configData['columns'] ?? [
+                'usu_usuarios.cod_usuario',
+                "CONCAT(usu_usuarios.nombre_1, ' ', usu_usuarios.apellido_1) AS nombre_completo",
+                'usu_usuarios.email',
+                'usu_usuarios.identidad',
+                'usu_usuarios.telefono_1',
+                'usu_tipo_usuario.cod_tipo_usuario',
+                'usu_tipo_usuario.etiqueta_english AS tipo_usuario',
+                "IF(usu_usuarios.es_veterano = 0, 'Standard', IF(usu_usuarios.es_veterano = 1, 'Veteran', 'H2A')) AS categoria",
+                'usu_usuarios.pin',
+                'usu_usuarios.qcpin'
+            ];
+            $group_by = $configData['group_by'] ?? [
+                'usu_usuarios.cod_usuario'
+            ];
+            $nota_configuracion = $configData['nota_configuracion'] ?? "";
+        }
+        // Asegurarse de que $empleados sea un array de objetos con propiedad 'id'
+        if (is_array($empleados)) {
+            $empleados = array_map(function ($item) {
+                if (is_array($item)) {
+                    return (object)$item;
+                }
+                return $item;
+            }, $empleados);
+        } else {
+            $empleados = [];
+        }
+        // return $empleados;
+        // die();
+        // $fecha_inicial = $request->input('fecha_inicial') ?? "";
+        // $fecha_final = $request->input('fecha_final') ?? "";
+
+        // $cod_granja = json_decode($request->input('cod_farm')) ?? [];
+        // $cod_location = json_decode($request->input('cod_location')) ?? [];
+        // $cod_categories = json_decode($request->input('cod_category')) ?? [];
+        // $empleados = json_decode($request->input('empleados')) ?? [];
+        // $columns = json_decode($request->input('columns')) ?? [
+        //     'usu_usuarios.cod_usuario',
+        //     "CONCAT(usu_usuarios.nombre_1, ' ', usu_usuarios.apellido_1) AS nombre_completo",
+        //     'usu_usuarios.email',
+        //     'usu_usuarios.identidad',
+        //     'usu_usuarios.telefono_1',
+        //     'usu_tipo_usuario.cod_tipo_usuario',
+        //     'usu_tipo_usuario.etiqueta_english AS tipo_usuario',
+        //     "IF(usu_usuarios.es_veterano = 0, 'Standard', IF(usu_usuarios.es_veterano = 1, 'Veteran', 'H2A')) AS categoria",
+        //     'usu_usuarios.pin',
+        //     'usu_usuarios.qcpin'
+        // ];
+        // $group_by = json_decode($request->input('group_by')) ?? [
+        //     'usu_usuarios.cod_usuario'
+        // ];
+        // $nota_configuracion = $request->input('nota_configuracion') ?? "";
+
+        $jsonConfiguracion = [
+            "fecha_inicial" => $fecha_inicial,
+            "fecha_final" => $fecha_final,
+            "cod_farm" => $cod_granja,
+            "cod_location" => $cod_location,
+            "cod_category" => $cod_categories,
+            "empleados" => $empleados,
+            "columns" => $columns,
+            "group_by" => $group_by,
+            "cod_config" => $cod_config,
+            "nota_configuracion" => $nota_configuracion,
+            "cod_usuario" => $_SESSION['cod_usuario'] ?? 1
+        ];
+
+
+
+
+        Log::info(json_encode($empleados));
+
+        $results = $this->generarDynamicReportData(
+            $fecha_inicial,
+            $fecha_final,
+            $cod_granja,
+            $cod_location,
+            $cod_categories,
+            $this->pluckIdEmpleados($empleados),
+            $columns,
+            $group_by
+        );
+
+        return response()->json([
+            "success" => true,
+            "message" => "Report configuration loaded successfully.",
+            "title" => "Success",
+            "data" => $results,
+            "jsonConfiguracion" => $jsonConfiguracion
+        ]);
     }
 
     public function generarDynamicReportData(
@@ -71,21 +305,21 @@ class ReporteDynamicReportController extends Controller
         $empleados,
         $columns,
         $group_by
-    ){
+    ) {
 
         $fecha_inicial = Carbon::createFromFormat('m-d-Y', $fecha_inicial)
-                            ->startOfDay()
-                            ->format('Y-m-d');
+            ->startOfDay()
+            ->format('Y-m-d');
         $fecha_final = Carbon::createFromFormat('m-d-Y', $fecha_final)
-                            ->endOfDay()
-                            ->format('Y-m-d');
+            ->endOfDay()
+            ->format('Y-m-d');
 
         DB::statement("SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
 
         $vienenEscaneos = false;
-        foreach($columns as $column){
+        foreach ($columns as $column) {
             // verificar si vienen escaneos
-            if(str_contains($column, 'escaneos')){
+            if (str_contains($column, 'escaneos')) {
                 $vienenEscaneos = true;
                 break;
             }
@@ -95,10 +329,10 @@ class ReporteDynamicReportController extends Controller
 
         $columnsString = "";
         $i = 0;
-        foreach($columns as $column){
+        foreach ($columns as $column) {
             // Generando el raw string para el select
             $columnsString .= $column;
-            if($i < count($columns) - 1){
+            if ($i < count($columns) - 1) {
                 $columnsString .= ", ";
             }
             $i++;
@@ -106,18 +340,18 @@ class ReporteDynamicReportController extends Controller
 
         $groupString = "";
         $i = 0;
-        foreach($group_by as $g){
+        foreach ($group_by as $g) {
             // generando el raw string para el group by
-            if($g != ""){
+            if ($g != "") {
                 $groupString .= $g;
-                if($i < count($group_by) - 1){
+                if ($i < count($group_by) - 1) {
                     $groupString .= ", ";
                 }
             }
             $i++;
         }
 
-        if($vienenEscaneos){
+        if ($vienenEscaneos) {
             $query = DB::table('usu_usuarios')
                 ->selectRaw($columnsString)
                 ->join('pay_crews', 'usu_usuarios.cod_usuario', '=', 'pay_crews.cod_empleado')
@@ -128,7 +362,7 @@ class ReporteDynamicReportController extends Controller
                 ->leftJoin('pay_jobs_progresos', 'pay_harvests.cod_harvest', '=', 'pay_jobs_progresos.cod_harvest')
                 ->where('pay_jobs_progresos.fecha_job', '>=', $fecha_inicial)
                 ->where('pay_jobs_progresos.fecha_job', '<=', $fecha_final);
-        }else{
+        } else {
             $query = DB::table('pay_bitacora_inicio_sesion')
                 ->selectRaw($columnsString)
                 ->leftJoin('usu_usuarios', 'pay_bitacora_inicio_sesion.cod_usuario', '=', 'usu_usuarios.cod_usuario')
@@ -140,39 +374,39 @@ class ReporteDynamicReportController extends Controller
         }
 
 
-        if(count($cod_granja) > 0){
-            if($vienenEscaneos){
+        if (count($cod_granja) > 0) {
+            if ($vienenEscaneos) {
                 $query->whereIn('far_farms.cod_farms', $cod_granja);
-            }else{
+            } else {
                 $query->whereIn('pay_bitacora_inicio_sesion.cod_farm_ci', $cod_granja);
             }
         }
-        if(count($cod_location) > 0 && !$vienenEscaneos){
+        if (count($cod_location) > 0 && !$vienenEscaneos) {
             $query->whereIn('far_locations.cod_location', $cod_location);
         }
-        if(count($cod_categories) > 0){
+        if (count($cod_categories) > 0) {
             $query->whereIn('usu_usuarios.es_veterano', $cod_categories);
         }
-        if(count($empleados) > 0){
-            if($vienenEscaneos){
+        if (count($empleados) > 0) {
+            if ($vienenEscaneos) {
                 $query->whereIn('usu_usuarios.cod_usuario', $empleados);
-            }else{
+            } else {
                 $query->whereIn('pay_bitacora_inicio_sesion.cod_usuario', $empleados);
             }
         }
-        if(count($group_by) > 0){
+        if (count($group_by) > 0) {
             $query->groupByRaw($groupString);
-        }else{
+        } else {
             $query->groupBy('usu_usuarios.cod_usuario');
         }
         $result = $query->orderBy('usu_usuarios.nombre_1')->get();
 
 
         return $result;
-
     }
 
-    public function exportDynamicReport(Request $request){
+    public function exportDynamicReport(Request $request)
+    {
 
         $fecha_inicial = $request->input('fecha_inicial') ?? "";
         $fecha_final = $request->input('fecha_final') ?? "";
@@ -197,7 +431,7 @@ class ReporteDynamicReportController extends Controller
         ];
 
         $filename = "dynamic_report_"
-            . Carbon::createFromFormat('m-d-Y', $fecha_inicial)->format('Y-m-d')."_"
+            . Carbon::createFromFormat('m-d-Y', $fecha_inicial)->format('Y-m-d') . "_"
             . Carbon::createFromFormat('m-d-Y', $fecha_final)->format('Y-m-d');
 
         return Excel::download(
@@ -211,19 +445,19 @@ class ReporteDynamicReportController extends Controller
                 $columns,
                 $group_by
             ),
-            $filename.'.xlsx',
+            $filename . '.xlsx',
             null,
             [
                 'Content-Type' => 'application/octet-stream',
                 'Content-Disposition' => 'attachment; filename="' . $filename . '.xlsx"',
             ]
         );
-
     }
 
-    private function fixColumns(&$columns, $vienenEscaneos = false){
-        foreach($columns as &$column){
-            switch($column){
+    private function fixColumns(&$columns, $vienenEscaneos = false)
+    {
+        foreach ($columns as &$column) {
+            switch ($column) {
                 case 'cod_usuario':
                     $column = "usu_usuarios.cod_usuario";
                     break;
@@ -258,16 +492,16 @@ class ReporteDynamicReportController extends Controller
                     $column = 'if(usu_usuarios.es_veterano = 0, "Standard", if(usu_usuarios.es_veterano = 1, "Veteran", "H2A")) as categoria';
                     break;
                 case 'cod_location':
-                    if(!$vienenEscaneos){
+                    if (!$vienenEscaneos) {
                         $column = "far_locations.cod_location";
-                    }else{
+                    } else {
                         $column = "'Field'";
                     }
                     break;
                 case 'location':
-                    if(!$vienenEscaneos){
+                    if (!$vienenEscaneos) {
                         $column = "far_locations.location";
-                    }else{
+                    } else {
                         $column = "'Field'";
                     }
                     break;
@@ -310,9 +544,10 @@ class ReporteDynamicReportController extends Controller
         return $columns;
     }
 
-    private function fixGroupBy(&$group_by, $vienenEscaneos = false){
-        foreach($group_by as &$g){
-            switch($g){
+    private function fixGroupBy(&$group_by, $vienenEscaneos = false)
+    {
+        foreach ($group_by as &$g) {
+            switch ($g) {
                 case "cod_usuario":
                     $g = "usu_usuarios.cod_usuario";
                     break;
@@ -323,16 +558,16 @@ class ReporteDynamicReportController extends Controller
                     $g = "categoria";
                     break;
                 case "cod_farm_ci":
-                    if(!$vienenEscaneos){
+                    if (!$vienenEscaneos) {
                         $g = "pay_bitacora_inicio_sesion.cod_farm_ci";
-                    }else{
+                    } else {
                         $g = "far_farms.cod_farms as cod_farm_ci";
                     }
                     break;
                 case "cod_location_ci":
-                    if(!$vienenEscaneos){
+                    if (!$vienenEscaneos) {
                         $g = "pay_bitacora_inicio_sesion.cod_location_ci";
-                    }else{
+                    } else {
                         $g = "";
                     }
                     break;
@@ -341,9 +576,10 @@ class ReporteDynamicReportController extends Controller
         return $group_by;
     }
 
-    public function pluckIdEmpleados($empleados){
+    public function pluckIdEmpleados($empleados)
+    {
         $e = [];
-        foreach($empleados as $empleado){
+        foreach ($empleados as $empleado) {
             array_push($e, $empleado->id);
         }
         return $e;

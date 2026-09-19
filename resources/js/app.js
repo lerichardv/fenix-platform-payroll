@@ -26,6 +26,25 @@ $(document).ready(function () {
         }
     });
 
+    var initialComentarioValue = "";
+
+    $('#formularioAgregarComentario').on('show.bs.modal', function () {
+        initialComentarioValue = $('#comentario_registro_ingreso').val();
+        initialComentarioValue = initialComentarioValue != null ? initialComentarioValue.trim() : "";
+        $('#guardar_comentario_en_registro').prop('disabled', true);
+
+    });
+
+    $('#comentario_registro_ingreso').on('input', function () {
+        const currentValue = $(this).val().trim();
+        if (currentValue !== initialComentarioValue) {
+            $('#guardar_comentario_en_registro').prop('disabled', false);
+        } else {
+            $('#guardar_comentario_en_registro').prop('disabled', true);
+
+        }
+    });
+
     $('#cod_farm').on('change', function () {
         cargarListaHarvestPorGranjas("cods_harvests", $("#fecha_del_grupo_modal").val());
         cargarListaMiscelaneosPorGranjas("cods_miscelaneos", $("#fecha_del_grupo_modal").val())
@@ -103,6 +122,10 @@ $(document).ready(function () {
                     let cantidadRegistrosFallidos = localStorage.getItem('cantidad_registros_fallidos') ?? 0;
                     let CALCULO_HORAS = "N/D";
                     let codInicioSesion = registro["cod_inicio_sesion"];
+
+                    let nombre_admin_comentario = registro["nombre_admin_comentario"];
+                    let fecha_comentario = registro["fecha_comentario"];
+
                     let lunch_acreditado = registro["lunch_acreditado"];
 
                     let lunch_automatico = registro["lunch_automatico"];
@@ -113,6 +136,7 @@ $(document).ready(function () {
                     let locationClockinId = registro["locationClockinId"];
                     let granjaClockout = registro["granjaClockout"];
                     let locationClockout = registro["locationClockout"];
+                    let comentario = registro["comentario"];
 
                     dataEsVeterano = registro["usuario_veterano"];
                     $("#cod_usuario").find('option:selected').data('esveterano', dataEsVeterano);
@@ -210,7 +234,10 @@ $(document).ready(function () {
                                                 <input class="form-check-input" type="checkbox" ${lunch_acreditado == 1 ? "checked" : ""} onclick="alternarAsinacionAlmuerzo('${codInicioSesion}', 'lbl_cabecera_horas_totales_${codInicioSesion}')" id="checkbox_asignar_almuerzo_${codInicioSesion}" style="height: 25px; width: 25px; margin-top: 0px;">
                                             </div>
                                             <div class="d-flex align-items-center gap-2">
-                                                <button class="btn btn-danger" onclick="eliminarTarea(${codInicioSesion})" style="height: 25px; width: 25px; font-size: 12px; padding:0px;">
+                                                <button class="btn btn-info" data-toggle="tooltip" title="Add comment" onclick="abrirModalAgregarComentario(${codInicioSesion})" style="height: 25px; width: 25px; font-size: 12px; padding:0px;">
+                                                    <i id="icon_comentario_${codInicioSesion}" data-comentario='${comentario}' data-nombre_admin_comentario='${nombre_admin_comentario}' data-fecha_comentario='${fecha_comentario}' class=" ${comentario == '' ? "fa-regular" : "fa-solid"} fa-comment"></i>
+                                                </button>
+                                                <button class="btn btn-danger" data-toggle="tooltip" title="Delete entry" onclick="eliminarTarea(${codInicioSesion})" style="height: 25px; width: 25px; font-size: 12px; padding:0px;">
                                                     <i class="fa-solid fa-trash"></i>
                                                 </button>
                                                 <button class="btn btn-success " data-toggle="tooltip" title="ADD" data-bs-toggle="modal" onclick="abrirModal('${codInicioSesion}', '${cantidadRegistros}', '${FECHA_ACTUAL}')" style="height: 25px; width: 25px; font-size: 12px; padding:0px;">
@@ -692,7 +719,6 @@ $(document).ready(function () {
             toggleBulkAddModeOnAddNewClockRecordModal(false);
         }
     });
-    toggleBulkAddModeOnAddNewClockRecordModal(false);
 
     // Actions for the add harvest or miscelaneous activity for employees modal
     $(".misc-field, .harvest-field").hide();
@@ -759,6 +785,73 @@ $(document).ready(function () {
             "select_misc_activity_add_activity_form"
         );
     });
+
+    $('#guardar_comentario_en_registro').on('click', function () {
+
+        // Mostrar loading
+        $('#guardar_comentario_en_registro').prop('disabled', true);
+        $('#guardar_comentario_en_registro').append('<span id="comentario_loading_spinner" class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true"></span>');
+
+        $.ajax({
+            url: window.location.href + 'api/v1/empleado_administracion/agregarComentarioRegistroIngreso',
+            type: 'POST',
+            data: {
+                comentario_registro_ingreso: $('#comentario_registro_ingreso').val().trim(),
+                id_registro_ingreso: $('#id_registro_ingreso').val(),
+                fecha_comentario: getCurrentFormattedDate(),
+            },
+            success: function (response) {
+                $('#guardar_comentario_en_registro').prop('disabled', false);
+                $('#guardar_comentario_en_registro').find('#comentario_loading_spinner').remove();
+                // console.log({ response });
+                if (response["success"] == true) {
+                    alert(response["message"]);
+                    const iconId = `#icon_comentario_${$('#id_registro_ingreso').val()}`;
+                    $(iconId).data('comentario', $('#comentario_registro_ingreso').val());
+
+
+                    $(iconId).data('nombre_admin_comentario', response["data"]['nombre_admin_comentario']);
+                    $(iconId).data('fecha_comentario', response["data"]['fecha_comentario']);
+
+                    if ($('#comentario_registro_ingreso').val() == null || $('#comentario_registro_ingreso').val() == "") {
+                        $(iconId).removeClass('fa-solid').addClass('fa-regular');
+
+                    } else {
+                        $(iconId).removeClass('fa-regular').addClass('fa-solid');
+                    }
+                    $('#comentario_registro_ingreso').val("");
+                    $('#id_registro_ingreso').val("");
+
+                    $('#formularioAgregarComentario').modal('hide');
+                } else {
+                    alert(response["message"]);
+
+                }
+
+            },
+            error: function (xhr) {
+                $('#guardar_comentario_en_registro').prop('disabled', false);
+                $('#guardar_comentario_en_registro').find('#comentario_loading_spinner').remove();
+                console.error('Error:', xhr.responseText);
+            }, finally: function () {
+                $('#guardar_comentario_en_registro').prop('disabled', false);
+                $('#guardar_comentario_en_registro').find('#comentario_loading_spinner').remove();
+            }
+        });
+
+    });
+
+    function getCurrentFormattedDate() {
+        const now = new Date();
+        const day = now.getDate().toString().padStart(2, '0');
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const year = now.getFullYear();
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        return `${day}-${month}-${year} ${hours}:${minutes}`;
+    }
+
+    toggleBulkAddModeOnAddNewClockRecordModal(false);
 
     function toggleBulkAddModeOnAddNewClockRecordModal(bulkAddModeEnabled = true) {
         $("#contenedor_date").toggle(!bulkAddModeEnabled);

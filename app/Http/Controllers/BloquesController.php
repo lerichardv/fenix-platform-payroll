@@ -131,25 +131,59 @@ class BloquesController extends Controller
         $cods_fields = explode(',', $cods_fields);
 
         HelpController::setDatabaseModeParaAgrupacionesGrandes();
-        $bloques = DB::table('far_crop_bloques_implementados')
-            ->select(
-                'far_crop_bloques_implementados.cod_bloque',
-                'far_bloques.bloque',
-                'far_crop_bloques_implementados.cod_field',
-                'far_crop_bloques_implementados.cod_farm',
-                'far_crop_semillas_bloques.cod_semilla',
-                'far_crop_semillas_bloques.cod_plantacion',
-            )
-            ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
-            ->join('far_bloques', 'far_bloques.cod_bloque', '=', 'far_crop_bloques_implementados.cod_bloque')
-            ->where('far_crop_bloques_implementados.cod_farm', $cod_farm)
-            ->whereIn('far_crop_bloques_implementados.cod_field', $cods_fields)
-            ->where('far_crop_semillas_bloques.cod_semilla', $cod_semilla)
-            ->where('far_crop_semillas_bloques.cod_plantacion', $cod_plantacion)
-            ->where('far_bloques.activo', 1)
-            ->groupBy('far_crop_bloques_implementados.cod_bloque')
-            ->distinct()
-            ->get();
+        if ($cod_semilla != 0 && $cod_plantacion != 0) {
+            $bloques = DB::table('far_crop_bloques_implementados')
+                ->select(
+                    'far_crop_bloques_implementados.cod_bloque',
+                    'far_bloques.bloque',
+                    'far_crop_bloques_implementados.cod_field',
+                    'far_crop_bloques_implementados.cod_farm',
+                    'far_crop_semillas_bloques.cod_semilla',
+                    'far_crop_semillas_bloques.cod_plantacion',
+                )
+                ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
+                ->join('far_bloques', 'far_bloques.cod_bloque', '=', 'far_crop_bloques_implementados.cod_bloque')
+                ->where('far_crop_bloques_implementados.cod_farm', $cod_farm)
+                ->whereIn('far_crop_bloques_implementados.cod_field', $cods_fields)
+                ->where('far_crop_semillas_bloques.cod_semilla', $cod_semilla)
+                ->where('far_crop_semillas_bloques.cod_plantacion', $cod_plantacion)
+                ->where('far_bloques.activo', 1)
+                ->groupBy('far_crop_bloques_implementados.cod_bloque')
+                ->distinct()
+                ->get();
+        } else {
+            $bloques = DB::table('far_bloques')
+                ->select(
+                    'cod_bloque',
+                    'cod_farm',
+                    'cod_field',
+                    'bloque',
+                    DB::raw('activo AS disponible')
+                )
+                ->where('cod_farm', $cod_farm)
+                ->whereIn('cod_field', $cods_fields)
+                ->where('activo', 1)
+                ->orderByRaw('CAST(bloque AS UNSIGNED)')
+                ->get();
+            // $bloques = DB::table('far_crop_bloques_implementados')
+            // ->select(
+            //     'far_crop_bloques_implementados.cod_bloque',
+            //     'far_bloques.bloque',
+            //     'far_crop_bloques_implementados.cod_field',
+            //     'far_crop_bloques_implementados.cod_farm',
+            //     'far_crop_semillas_bloques.cod_semilla',
+            //     'far_crop_semillas_bloques.cod_plantacion',
+            // )
+            // ->join('far_crop_semillas_bloques', 'far_crop_semillas_bloques.cod_bloque_implementado', '=', 'far_crop_bloques_implementados.cod_bloque_implementado')
+            // ->join('far_bloques', 'far_bloques.cod_bloque', '=', 'far_crop_bloques_implementados.cod_bloque')
+            // ->where('far_crop_bloques_implementados.cod_farm', $cod_farm)
+            // ->whereIn('far_crop_bloques_implementados.cod_field', $cods_fields)
+            // ->where('far_bloques.activo', 1)
+            // ->groupBy('far_crop_bloques_implementados.cod_bloque')
+            // ->distinct()
+            // ->get();
+        }
+
 
         return $bloques;
     }

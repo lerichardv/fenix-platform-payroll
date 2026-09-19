@@ -106,98 +106,38 @@ class PaquetesController extends Controller
         $cod_farm = $body['cod_farm'];
         $cod_locacion = $body['cod_locacion'];
         $cod_categoria = $body['cod_categoria'] ?? 0;
-        $cods_tipos_packs = [];
-        if ($cod_locacion != 0) {
 
-            $cods_tipos_packs = DB::table('pay_pack_for_farm_location_category')
-                ->select(DB::raw('GROUP_CONCAT(DISTINCT cod_tipo_pack) AS cod_tipo_pack'))
-                ->where('cod_farm', $cod_farm)
-                ->where('cod_location', $cod_locacion)
-                ->where('cod_categoria', $cod_categoria)
-                ->where('pay_pack_for_farm_location_category.activo', 1)
-                ->where('pay_pack_for_farm_location_category.visible', 1)
-                ->get()
-                ->pluck('cod_tipo_pack')
-                ->toArray();
-        } else {
-
-            $cods_tipos_packs = DB::table('pay_pack_for_farm_location_category')
-                ->select(DB::raw('GROUP_CONCAT(DISTINCT cod_tipo_pack) AS cod_tipo_pack'))
-                ->where('cod_farm', $cod_farm)
-                ->where('cod_categoria', $cod_categoria)
-                ->where('pay_pack_for_farm_location_category.activo', 1)
-                ->where('pay_pack_for_farm_location_category.visible', 1)
-                ->get()
-                ->pluck('cod_tipo_pack')
-                ->toArray();
-        }
-
-        $cods_tipos_packs = explode(',', $cods_tipos_packs[0]);
-
-        $tipoPacks = DB::table('pay_tipo_packs')
-            ->whereIn('pay_tipo_packs.cod_tipo_pack', $cods_tipos_packs)
-            ->where('pay_tipo_packs.activo', 1)
-            ->where('pay_pack_for_farm_location_category.activo', 1)
-            ->where('pay_pack_for_farm_location_category.visible', 1)
-            ->join(
-                'pay_pack_for_farm_location_category',
-                'pay_pack_for_farm_location_category.cod_tipo_pack',
-                '=',
-                'pay_tipo_packs.cod_tipo_pack'
-            )
+        $tipoPacks = DB::table('pay_tipo_packs as pack')
+            ->join('pay_tipo_paquetes_granjas as pack_granja', 'pack_granja.cod_tipo_pack', '=', 'pack.cod_tipo_pack')
+            ->join('pay_tipo_paquetes_locaciones as pack_locacion', 'pack_locacion.cod_tipo_pack', '=', 'pack.cod_tipo_pack')
+            ->join('pay_tipo_paquetes_categorias as pack_categoria', 'pack_categoria.cod_tipo_pack', '=', 'pack.cod_tipo_pack')
             ->select(
-                'pay_tipo_packs.cod_tipo_pack',
-                'pay_tipo_packs.tipo_pack',
-                'pay_tipo_packs.cantidad',
-                'pay_tipo_packs.activo',
-                'pay_pack_for_farm_location_category.cod_farm',
-                'pay_pack_for_farm_location_category.cod_location',
-                'pay_pack_for_farm_location_category.cod_categoria'
+                'pack.cod_tipo_pack',
+                'pack.tipo_pack',
+                'pack.cantidad',
+                'pack.activo',
+                'pack.piece_rate',
+                'pack_granja.cod_farm',
+                'pack_locacion.cod_locacion',
+                'pack_categoria.cod_categoria'
             )
+            ->where('pack.activo', 1)
+            ->where('pack_granja.activo', 1)
+            ->where('pack_categoria.activo', 1)
 
+            ->when($cod_farm != 0, function ($query) use ($cod_farm) {
+                return $query->where('pack_granja.cod_farm', $cod_farm);
+            })
+            ->when($cod_categoria != 0, function ($query) use ($cod_categoria) {
+                return $query->where('pack_categoria.cod_categoria', $cod_categoria);
+            })
+            ->when($cod_locacion != 0, function ($query) use ($cod_locacion) {
+                return $query->where('pack_locacion.cod_locacion', $cod_locacion);
+            })
             ->get();
+
         HelpController::desconectarBaseDatos();
 
-        return response()->json($tipoPacks, 200);
-    }
-    public function listaTiposPaquetesAsociados()
-    {
-
-
-        $cods_tipos_packs = [];
-
-        $cods_tipos_packs = DB::table('pay_pack_for_farm_location_category')
-            ->select(DB::raw('GROUP_CONCAT(DISTINCT cod_tipo_pack) AS cod_tipo_pack'))
-            ->where('pay_pack_for_farm_location_category.activo', 1)
-            ->where('pay_pack_for_farm_location_category.visible', 1)
-            ->get()
-            ->pluck('cod_tipo_pack')
-            ->toArray();
-
-
-        $cods_tipos_packs = explode(',', $cods_tipos_packs[0]);
-        $tipoPacks = DB::table('pay_tipo_packs')
-            ->whereIn('pay_tipo_packs.cod_tipo_pack', $cods_tipos_packs)
-            ->where('pay_pack_for_farm_location_category.activo', 1)
-            ->where('pay_pack_for_farm_location_category.visible', 1)
-            // ->where('pay_tipo_packs.activo', 1)
-            ->join(
-                'pay_pack_for_farm_location_category',
-                'pay_pack_for_farm_location_category.cod_tipo_pack',
-                '=',
-                'pay_tipo_packs.cod_tipo_pack'
-            )
-            ->select(
-                'pay_tipo_packs.cod_tipo_pack',
-                'pay_tipo_packs.tipo_pack',
-                'pay_tipo_packs.cantidad',
-                'pay_tipo_packs.activo',
-                'pay_pack_for_farm_location_category.cod_farm',
-                'pay_pack_for_farm_location_category.cod_location',
-                'pay_pack_for_farm_location_category.cod_categoria'
-            )
-            ->get();
-        HelpController::desconectarBaseDatos();
         return response()->json($tipoPacks, 200);
     }
 
