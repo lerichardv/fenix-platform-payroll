@@ -181,6 +181,9 @@ class ReporteEmployeeHoursLocationController extends Controller
         // Recopilando la información de los usuarios, granjas y locaciones para obtener los cálculos
         foreach ($employees as $e) {
             $usuario = Usuario::find($e->id);
+            if (!$usuario) {
+                continue;
+            }
             $registroIngreso = RegistroIngreso::where('cod_usuario', $usuario->cod_usuario)
                 ->where('fecha_ingreso', '>=', $initial_date)
                 ->where('fecha_egreso', '<=', $final_date);
@@ -190,7 +193,11 @@ class ReporteEmployeeHoursLocationController extends Controller
             if ($cod_location != 0) {
                 $registroIngreso->where('cod_location_ci', $cod_location);
             }
-            $usuario->registros = $registroIngreso->get();
+            // Deduplicar registros con la misma marca de tiempo exacta de ingreso
+            $usuario->registros = $registroIngreso->orderBy('fecha_egreso', 'desc')
+                ->get()
+                ->unique(fn($r) => (string) $r->fecha_ingreso)
+                ->values();
             array_push($usuarios, $usuario);
         }
 
@@ -198,6 +205,7 @@ class ReporteEmployeeHoursLocationController extends Controller
         // Recorremos la data para calcular las horas trabajadas dados los parámetros
         foreach ($usuarios as $usuario) {
             $horas_usuario = 0;
+            $es_veterano = $usuario->es_veterano ?? 0;
             foreach ($usuario->registros as $registro) {
                 if (!empty($registro->fecha_egreso)) {
 
@@ -210,11 +218,11 @@ class ReporteEmployeeHoursLocationController extends Controller
                         $this->ajustarFechaAlFinalDelDiaSi12AM($fecha_egreso_sin_segundos)
                     );
 
-                    if ($registro->lunch_acreditado == "1" && $registro->usuario->es_veterano != "1") {
+                    if ($registro->lunch_acreditado == "1" && $es_veterano != "1") {
                         $milisegundos = $milisegundos - (30 * 60000);
                     } else if (
                         $registro->lunch_automatico == "1"
-                        && $registro->usuario->es_veterano != "1"
+                        && $es_veterano != "1"
                         && $this->milisegundosAHoras($milisegundos) >= 5
                     ) {
                         $milisegundos = $milisegundos - (30 * 60000);
@@ -253,94 +261,62 @@ class ReporteEmployeeHoursLocationController extends Controller
         $usuarios = [];
 
         // Recopilando la información de los usuarios, granjas y locaciones para obtener los cálculos
-        $granjasSeleccionadas = [];
-        $locacionesSeleccionadas = [];
-        // if ($cod_farm == 0) {
-        //     $granjasSeleccionadas = Granja::todasLasActivas();
-        // } else {
-        //     $granjasSeleccionadas = Granja::where('cod_farms', $cod_farm)->get();
-        // }
-        // if ($cod_location == 0) {
-        //     $locacionesSeleccionadas = Locacion::todasLasActivas();
-        // } else {
-        //     $locacionesSeleccionadas = Locacion::where('cod_location', $cod_location)->get();
-        // }
+        $granjasBase = $cod_farm == 0 ? Granja::todasLasActivas() : Granja::where('cod_farms', $cod_farm)->get();
 
         foreach ($employees as $e) {
             $usuario = Usuario::find($e->id);
-            if ($cod_farm == 0) {
-                // $usuario->granjas = Granja::todasLasActivas();
-                $granjasSeleccionadas = Granja::todasLasActivas();
-            } else {
-                $granjasSeleccionadas = Granja::where('cod_farms', $cod_farm)->get();
-                // $usuario->granjas = Granja::where('cod_farms', $cod_farm)->get();
+            if (!$usuario) {
+                continue;
             }
-            $usuario->granjas = $granjasSeleccionadas;
-            foreach ($usuario->granjas as $granja) {
+
+            // Clonar granjas y locaciones para garantizar colecciones e instancias independientes por usuario
+            $granjasUsuario = [];
+            foreach ($granjasBase as $granjaOriginal) {
+                $granja = clone $granjaOriginal;
                 if ($cod_location == 0) {
-                    // $granja->locations = Locacion::todasLasActivas();
-                    $locacionesSeleccionadas = Locacion::todasLasActivas();
+                    $locaciones = Locacion::where('activo', '1')
+                        ->where('cod_farms', $granja->cod_farms)
+                        ->get();
                 } else {
-                    $locacionesSeleccionadas = Locacion::where('cod_location', $cod_location)->get();
-                    // $granja->locations = Locacion::where('cod_location', $cod_location)->get();
+                    $locaciones = Locacion::where('cod_location', $cod_location)->get();
                 }
-                $granja->locations = $locacionesSeleccionadas;
+
+                $locationsGranja = [];
+                foreach ($locaciones as $locOriginal) {
+                    $locationsGranja[] = clone $locOriginal;
+                }
+                $granja->locations = collect($locationsGranja);
+                $granjasUsuario[] = $granja;
             }
+
+            $usuario->granjas = collect($granjasUsuario);
             array_push($usuarios, $usuario);
         }
-
-        // $granjasSeleccionadas = $cod_farm == 0 ? Granja::todasLasActivas() : Granja::where('cod_farms', $cod_farm)->get();
-        // $locacionesSeleccionadas = $cod_location == 0 ? Locacion::todasLasActivas() : Locacion::where('cod_location', $cod_location)->get();
-        // foreach ($employees as $e) {
-        //     $usuario = Usuario::find($e->id);
-        //     $usuario->granjas = $granjasSeleccionadas;
-        //     foreach ($usuario->granjas as $granja) {
-        //         $granja->locations = $locacionesSeleccionadas;
-        //     }
-        //     array_push($usuarios, $usuario);
-        // }
-
 
         // Recorremos la data para calcular las horas trabajadas dados los parámetros
         foreach ($usuarios as $usuario) {
             $milisegundosUsuario = 0;
+            $es_veterano = $usuario->es_veterano ?? 0;
+
             foreach ($usuario->granjas as $granja) {
                 $milisegundosGranja = 0;
-                //  Log::info("========== Farm $granja->cod_farms ==========");
+
                 foreach ($granja->locations as $location) {
-                    //    Log::info("========== Location $location->cod_location ==========");
                     $registros = RegistroIngreso::where('cod_usuario', $usuario->cod_usuario)
                         ->where('fecha_ingreso', '>=', $initial_date)
                         ->where('fecha_egreso', '<=', $final_date)
                         ->where('cod_farm_ci', $granja->cod_farms)
-                        ->where('cod_location_ci', $location->cod_location);
-                    // $registros = DB::table('pay_bitacora_inicio_sesion as bita')
-                    //     ->join('usu_usuarios as usu', 'usu.cod_usuario', '=', 'bita.cod_usuario')
-                    //     ->select(
-                    //         'bita.cod_usuario',
-                    //         'bita.fecha_egreso',
-                    //         'bita.fecha_ingreso',
-                    //         'bita.lunch_acreditado',
-                    //         'bita.lunch_automatico',
-                    //         'usu.es_veterano'
-                    //     )
-                    //     ->where('bita.cod_usuario', '>=', $usuario->cod_usuario)
-                    //     ->where('bita.fecha_ingreso', '>=', $initial_date)
-                    //     ->where('bita.fecha_egreso', '<=', $final_date)
-                    //     ->where('bita.cod_farm_ci', $granja->cod_farms)
-                    //     ->where('bita.cod_location_ci', $location->cod_location);
-                    $result = $registros->get();
-                    // if(count($result) > 0){
-                    //     Log::info(json_encode([$initial_date, $final_date, $granja->cod_farms, $location->cod_location]));
-                    // }
+                        ->where('cod_location_ci', $location->cod_location)
+                        ->orderBy('fecha_egreso', 'desc');
+
+                    // Deduplicar registros con la misma marca de tiempo exacta de ingreso
+                    $result = $registros->get()
+                        ->unique(fn($r) => (string) $r->fecha_ingreso)
+                        ->values();
+
                     $milisegundosTrabajados = 0;
-                    if (count($result) == 0) {
-                        //Log::info($registros->toRawSql());
-                    }
 
                     foreach ($result as $registro) {
-
-                        //Log::info("Fechas: " . json_encode([$registro->fecha_ingreso, $registro->fecha_egreso]));
 
                         // Eliminar segundos y milisegundos de las fechas
                         $fecha_ingreso_sin_segundos = (new \DateTime($registro->fecha_ingreso))->format('Y-m-d H:i');
@@ -351,27 +327,18 @@ class ReporteEmployeeHoursLocationController extends Controller
                             $this->ajustarFechaAlFinalDelDiaSi12AM($fecha_egreso_sin_segundos)
                         );
 
-                        //Log::info(message: "Milisegundos antes: " . $milisegundos);
-
-                        if ($registro->lunch_acreditado == "1" && $registro->usuario->es_veterano != "1") {
-                        // if ($registro->lunch_acreditado == "1" && $registro->es_veterano != "1") {
+                        if ($registro->lunch_acreditado == "1" && $es_veterano != "1") {
                             $milisegundos = $milisegundos - (30 * 60000);
                         } else if (
                             $registro->lunch_automatico == "1"
-                            && $registro->usuario->es_veterano != "1"
-                            // && $registro->es_veterano != "1"
+                            && $es_veterano != "1"
                             && $this->milisegundosAHoras($milisegundos) >= 5
                         ) {
                             $milisegundos = $milisegundos - (30 * 60000);
                         }
 
-                        //   Log::info(message: "Milisegundos despues: " . $milisegundos);
-
                         $milisegundosTrabajados += $milisegundos;
-
-                        //  Log::info("Horas trabajadas: " . $this->convertirMilisegundosAFormato($milisegundos));
                     }
-                    // $location->registrosTEMP = $result;
 
                     $location->horas_trabajadas = $this->convertirMilisegundosAFormato($milisegundosTrabajados);
                     $location->horas_trabajadas_decimales = $this->formatearTiempoAHoraDecimal($this->convertirMilisegundosAFormato($milisegundosTrabajados));
