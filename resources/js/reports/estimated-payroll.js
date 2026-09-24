@@ -254,7 +254,7 @@ function buildReporte(data, query_contenedor = "#contenedor_empleados"){
             <div class="col-12">
                 <div class="row w-100 border-bottom">
                     <div class="col-4 px-3 py-2">
-                        <span>${usuario.apellido_1}${usuario.apellido_2 ? "-"+usuario.apellido_2 : ""}, ${usuario.nombre_1}-${usuario.nombre_2}</span>
+                        <span>${usuario.apellido_1}${usuario.apellido_2 ? "-"+usuario.apellido_2 : ""}, ${usuario.nombre_1}${usuario.nombre_2 ? "-"+usuario.nombre_2 : ""}</span>
                         <small>PIN: ${usuario.pin}</small>
                     </div>
                     <div class="col-2 px-3 py-2">

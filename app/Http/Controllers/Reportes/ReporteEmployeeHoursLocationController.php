@@ -14,9 +14,17 @@ use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Http\Exports\EmployeeHoursLocationExport;
 use Illuminate\Support\Facades\DB;
+use App\Services\CalculoHorasService;
 
 class ReporteEmployeeHoursLocationController extends Controller
 {
+    protected $calculoHorasService;
+
+    public function __construct(?CalculoHorasService $calculoHorasService = null)
+    {
+        $this->calculoHorasService = $calculoHorasService ?? app(CalculoHorasService::class);
+    }
+
     public function index()
     {
         return view('admin.reportes.reporte_employee_hours_location')
@@ -164,76 +172,28 @@ class ReporteEmployeeHoursLocationController extends Controller
         $cod_location,
         $employees,
     ) {
-
-        // dd($initial_date);
-
-        if ($initial_date != "" && $final_date != "") {
-            $initial_date = Carbon::createFromFormat('m-d-Y', $initial_date)
-                ->startOfDay()
-                ->format('Y-m-d H:i:s');
-            $final_date = Carbon::createFromFormat('m-d-Y', $final_date)
-                ->endOfDay()
-                ->format('Y-m-d H:i:s');
-        }
-
         $usuarios = [];
 
-        // Recopilando la información de los usuarios, granjas y locaciones para obtener los cálculos
         foreach ($employees as $e) {
             $usuario = Usuario::find($e->id);
             if (!$usuario) {
                 continue;
             }
-            $registroIngreso = RegistroIngreso::where('cod_usuario', $usuario->cod_usuario)
-                ->where('fecha_ingreso', '>=', $initial_date)
-                ->where('fecha_egreso', '<=', $final_date);
-            if ($cod_farm != 0) {
-                $registroIngreso->where('cod_farm_ci', $cod_farm);
-            }
-            if ($cod_location != 0) {
-                $registroIngreso->where('cod_location_ci', $cod_location);
-            }
-            // Deduplicar registros con la misma marca de tiempo exacta de ingreso
-            $usuario->registros = $registroIngreso->orderBy('fecha_egreso', 'desc')
-                ->get()
-                ->unique(fn($r) => (string) $r->fecha_ingreso)
-                ->values();
+
+            // Obtener registros deduplicados por fecha_ingreso
+            $registros = $this->calculoHorasService->obtenerRegistrosDeduplicados(
+                $usuario->cod_usuario,
+                $initial_date,
+                $final_date,
+                $cod_farm,
+                $cod_location
+            );
+
+            // Calcular horas de cada registro
+            $this->calculoHorasService->calcularTotalesRegistros($registros, $usuario->es_veterano ?? 0);
+
+            $usuario->registros = $registros;
             array_push($usuarios, $usuario);
-        }
-
-
-        // Recorremos la data para calcular las horas trabajadas dados los parámetros
-        foreach ($usuarios as $usuario) {
-            $horas_usuario = 0;
-            $es_veterano = $usuario->es_veterano ?? 0;
-            foreach ($usuario->registros as $registro) {
-                if (!empty($registro->fecha_egreso)) {
-
-                    // Eliminar segundos y milisegundos de las fechas
-                    $fecha_ingreso_sin_segundos = (new \DateTime($registro->fecha_ingreso))->format('Y-m-d H:i');
-                    $fecha_egreso_sin_segundos = (new \DateTime($registro->fecha_egreso))->format('Y-m-d H:i');
-
-                    $milisegundos = $this->calcularMilisegundosEntreFechas(
-                        $fecha_ingreso_sin_segundos,
-                        $this->ajustarFechaAlFinalDelDiaSi12AM($fecha_egreso_sin_segundos)
-                    );
-
-                    if ($registro->lunch_acreditado == "1" && $es_veterano != "1") {
-                        $milisegundos = $milisegundos - (30 * 60000);
-                    } else if (
-                        $registro->lunch_automatico == "1"
-                        && $es_veterano != "1"
-                        && $this->milisegundosAHoras($milisegundos) >= 5
-                    ) {
-                        $milisegundos = $milisegundos - (30 * 60000);
-                    }
-
-                    // $horas_registro = $milisegundos / 3600000;
-                    // $registro->horas_trabajadas = $horas_registro < 0 ? 0 : $horas_registro;
-                    $registro->horas_trabajadas = $this->convertirMilisegundosAFormato($milisegundos);
-                }
-            }
-            $usuario->horas_trabajadas += $horas_usuario;
         }
 
         return $usuarios;
@@ -246,21 +206,9 @@ class ReporteEmployeeHoursLocationController extends Controller
         $cod_location,
         $employees,
     ) {
-
-        // dd($initial_date);
-
-        if ($initial_date != "" && $final_date != "") {
-            $initial_date = Carbon::createFromFormat('m-d-Y', $initial_date)
-                ->startOfDay()
-                ->format('Y-m-d H:i:s');
-            $final_date = Carbon::createFromFormat('m-d-Y', $final_date)
-                ->endOfDay()
-                ->format('Y-m-d H:i:s');
-        }
-
         $usuarios = [];
 
-        // Recopilando la información de los usuarios, granjas y locaciones para obtener los cálculos
+        // Recopilando la información de las granjas y locaciones base
         $granjasBase = $cod_farm == 0 ? Granja::todasLasActivas() : Granja::where('cod_farms', $cod_farm)->get();
 
         foreach ($employees as $e) {
@@ -302,56 +250,28 @@ class ReporteEmployeeHoursLocationController extends Controller
                 $milisegundosGranja = 0;
 
                 foreach ($granja->locations as $location) {
-                    $registros = RegistroIngreso::where('cod_usuario', $usuario->cod_usuario)
-                        ->where('fecha_ingreso', '>=', $initial_date)
-                        ->where('fecha_egreso', '<=', $final_date)
-                        ->where('cod_farm_ci', $granja->cod_farms)
-                        ->where('cod_location_ci', $location->cod_location)
-                        ->orderBy('fecha_egreso', 'desc');
+                    // Obtener registros deduplicados para esta granja y locación
+                    $registros = $this->calculoHorasService->obtenerRegistrosDeduplicados(
+                        $usuario->cod_usuario,
+                        $initial_date,
+                        $final_date,
+                        $granja->cod_farms,
+                        $location->cod_location
+                    );
 
-                    // Deduplicar registros con la misma marca de tiempo exacta de ingreso
-                    $result = $registros->get()
-                        ->unique(fn($r) => (string) $r->fecha_ingreso)
-                        ->values();
+                    $totalesLoc = $this->calculoHorasService->calcularTotalesRegistros($registros, $es_veterano);
 
-                    $milisegundosTrabajados = 0;
-
-                    foreach ($result as $registro) {
-
-                        // Eliminar segundos y milisegundos de las fechas
-                        $fecha_ingreso_sin_segundos = (new \DateTime($registro->fecha_ingreso))->format('Y-m-d H:i');
-                        $fecha_egreso_sin_segundos = (new \DateTime($registro->fecha_egreso))->format('Y-m-d H:i');
-
-                        $milisegundos = $this->calcularMilisegundosEntreFechas(
-                            $fecha_ingreso_sin_segundos,
-                            $this->ajustarFechaAlFinalDelDiaSi12AM($fecha_egreso_sin_segundos)
-                        );
-
-                        if ($registro->lunch_acreditado == "1" && $es_veterano != "1") {
-                            $milisegundos = $milisegundos - (30 * 60000);
-                        } else if (
-                            $registro->lunch_automatico == "1"
-                            && $es_veterano != "1"
-                            && $this->milisegundosAHoras($milisegundos) >= 5
-                        ) {
-                            $milisegundos = $milisegundos - (30 * 60000);
-                        }
-
-                        $milisegundosTrabajados += $milisegundos;
-                    }
-
-                    $location->horas_trabajadas = $this->convertirMilisegundosAFormato($milisegundosTrabajados);
-                    $location->horas_trabajadas_decimales = $this->formatearTiempoAHoraDecimal($this->convertirMilisegundosAFormato($milisegundosTrabajados));
-                    $milisegundosGranja += $milisegundosTrabajados;
+                    $location->horas_trabajadas = $totalesLoc['horas_formato'];
+                    $location->horas_trabajadas_decimales = $totalesLoc['horas_decimal_formato'];
+                    $milisegundosGranja += $totalesLoc['milisegundos'];
                 }
-                $granja->horas_trabajadas = $this->convertirMilisegundosAFormato($milisegundosGranja);
-                $granja->horas_trabajadas_decimales = $this->formatearTiempoAHoraDecimal($this->convertirMilisegundosAFormato($milisegundosGranja));
+                $granja->horas_trabajadas = $this->calculoHorasService->convertirMilisegundosAFormato($milisegundosGranja);
+                $granja->horas_trabajadas_decimales = $this->calculoHorasService->formatearTiempoAHoraDecimal($granja->horas_trabajadas);
                 $milisegundosUsuario += $milisegundosGranja;
             }
-            $usuario->horas_trabajadas = $this->convertirMilisegundosAFormato($milisegundosUsuario);
-            $usuario->horas_trabajadas_decimales = $this->formatearTiempoAHoraDecimal($this->convertirMilisegundosAFormato($milisegundosUsuario));
+            $usuario->horas_trabajadas = $this->calculoHorasService->convertirMilisegundosAFormato($milisegundosUsuario);
+            $usuario->horas_trabajadas_decimales = $this->calculoHorasService->formatearTiempoAHoraDecimal($usuario->horas_trabajadas);
         }
-
 
         HelpController::desconectarBaseDatos();
         return $usuarios;
@@ -359,149 +279,46 @@ class ReporteEmployeeHoursLocationController extends Controller
 
     public function formatearHora($time, $sin_punto = false)
     {
-        $hours = floor($time);
-        $minutes = ($time - $hours) * 60;
-        $minutes = number_format(($minutes / 60), 2) * 100;
-        $decimalTime = $sin_punto
-            ? str_replace(
-                ".",
-                "",
-                ($hours > 0 ? $hours : "") . str_pad($minutes, 2, "0", STR_PAD_LEFT)
-            )
-            : (string) $hours . "." . (string) str_pad($minutes, 2, "0", STR_PAD_LEFT);
-
-        // Log::info(json_encode([$hours, $minutes]));
-        return $decimalTime;
+        return $this->calculoHorasService->formatearHora($time, $sin_punto);
     }
 
-    /**
-     * Convierte una hora en formato H:i a hora decimal. Ej. 07:25 -> 7.42, lo devuelve en formato de dos dígitos.
-     * La parte de los minutos lo toma y lo divide entre 60, lo multiplica por 100 y lo ajusta a dos digitos. Si el resultado es solo 1 digito, entonces hay que hacer un str_pad para la izquierda con ceros.
-     * Si la hora es 00:25 el resultado será solo 41.
-     * Si los minutos son pocos,
-     * Puede también condicionalmente eliminar el punto
-     * @param mixed $timeString
-     * @param mixed $sin_punto
-     * @return float|string
-     */
     public function formatearTiempoAHoraDecimal($timeString, $sin_punto = false)
     {
-
-        // Separar la hora y los minutos
-        [$hora, $minutos] = explode(':', $timeString);
-
-        // Quitar ceros a la izquierda de la hora
-        $hora = ltrim($hora, '0');
-
-        // Convertir los minutos a su parte decimal
-        $minutos_decimal = round(($minutos / 60) * 100);
-
-        // Asegurar que los minutos tengan al menos dos dígitos
-        $minutos_decimal = str_pad($minutos_decimal, 2, '0', STR_PAD_LEFT);
-
-        // Formatear el resultado como decimal
-        $hora_decimal = "{$hora}.{$minutos_decimal}";
-
-        // Si se solicita sin punto, eliminarlo
-        if ($sin_punto) {
-            $hora_decimal = str_replace('.', '', $hora_decimal);
-        }
-
-        // Convertir el resultado al tipo correcto (float o string)
-        return $sin_punto ? $hora_decimal : (float) $hora_decimal;
+        return $this->calculoHorasService->formatearTiempoAHoraDecimal($timeString, $sin_punto);
     }
 
-    function formatearHorasATiempo($totalHours)
+    public function formatearHorasATiempo($totalHours)
     {
-        // Extraer horas y minutos
-        $hours = floor($totalHours); // Obtener la parte entera
-        $minutes = round(($totalHours - $hours) * 60); // Convertir la parte decimal a minutos
-
-        // Formatear como H:i
-        return str_pad($hours, 2, '0', STR_PAD_LEFT) . ':' . str_pad($minutes, 2, '0', STR_PAD_LEFT);
+        return $this->calculoHorasService->formatearHorasATiempo($totalHours);
     }
 
-    function formatearTiempoAsNumeroHoras($time)
+    public function formatearTiempoAsNumeroHoras($time)
     {
-        // Separar las horas y los minutos
-        list($hours, $minutes) = explode(':', $time);
-
-        // Convertir los minutos a fracción de hora y sumarlos a las horas
-        return $hours + ($minutes / 60);
+        return $this->calculoHorasService->formatearTiempoAsNumeroHoras($time);
     }
 
-    function calcularMinutosEntreFechas($fecha_inicial, $fecha_final)
+    public function calcularMinutosEntreFechas($fecha_inicial, $fecha_final)
     {
-
-        $fecha_inicial_datetime = new \DateTime($fecha_inicial);
-        $fecha_final_datetime = new \DateTime($fecha_final);
-
-        // Calcular la diferencia en minutos
-        $interval = $fecha_inicial_datetime->diff($fecha_final_datetime);
-
-        // Calcular la diferencia total en minutos con más precisión
-        $minutos =
-            ($interval->days * 24 * 60) +   // Diferencia en días a minutos
-            ($interval->h * 60) +           // Diferencia en horas a minutos
-            ($interval->i) +                // Diferencia en minutos
-            ($interval->s / 60);            // Diferencia en segundos a minutos
-
-        return $minutos;
+        return $this->calculoHorasService->calcularMinutosEntreFechas($fecha_inicial, $fecha_final);
     }
 
-    function calcularMilisegundosEntreFechas($fecha_inicial, $fecha_final)
+    public function calcularMilisegundosEntreFechas($fecha_inicial, $fecha_final)
     {
-
-        $fecha_inicial_datetime = new \DateTime($fecha_inicial);
-        $fecha_final_datetime = new \DateTime($fecha_final);
-
-        // Calcular la diferencia entre las dos fechas
-        $interval = $fecha_inicial_datetime->diff($fecha_final_datetime);
-
-        // Calcular la diferencia total en milisegundos
-        $milisegundos =
-            ($interval->days * 24 * 60 * 60 * 1000) + // Diferencia en días a milisegundos
-            ($interval->h * 60 * 60 * 1000) +         // Diferencia en horas a milisegundos
-            ($interval->i * 60 * 1000) +              // Diferencia en minutos a milisegundos
-            ($interval->s * 1000) +                   // Diferencia en segundos a milisegundos
-            (($fecha_final_datetime->format('u') - $fecha_inicial_datetime->format('u')) / 1000); // Diferencia en microsegundos a milisegundos
-
-        return $milisegundos;
+        return $this->calculoHorasService->calcularMilisegundosEntreFechas($fecha_inicial, $fecha_final);
     }
 
-    function convertirMilisegundosAFormato($milisegundos)
+    public function convertirMilisegundosAFormato($milisegundos)
     {
-        // Convertir milisegundos a segundos
-        $segundos_totales = $milisegundos / 1000;
-
-        // Calcular horas y minutos
-        $horas = floor($segundos_totales / 3600); // 1 hora = 3600 segundos
-        $minutos = floor(($segundos_totales % 3600) / 60); // Obtener el residuo en minutos
-
-        // Formatear en H:i
-        return sprintf('%02d:%02d', $horas, $minutos);
+        return $this->calculoHorasService->convertirMilisegundosAFormato($milisegundos);
     }
 
-    function milisegundosAHoras($milisegundos): float
+    public function milisegundosAHoras($milisegundos): float
     {
-        // Convertir milisegundos a horas
-        $horas = $milisegundos / 3600000; // 3600000 milisegundos = 1 hora
-
-        return $horas;
+        return $this->calculoHorasService->milisegundosAHoras($milisegundos);
     }
 
-    function ajustarFechaAlFinalDelDiaSi12AM($fecha)
+    public function ajustarFechaAlFinalDelDiaSi12AM($fecha)
     {
-        // Crear un objeto DateTime a partir de la fecha proporcionada
-        $fecha_datetime = new \DateTime($fecha);
-
-        // Verificar si la hora es exactamente 00:00:00
-        if ($fecha_datetime->format('H:i:s') === '00:00:00') {
-            // Ajustar la hora al final del día
-            $fecha_datetime->setTime(23, 59, 59);
-        }
-
-        // Retornar la fecha ajustada como string
-        return $fecha_datetime->format('Y-m-d H:i:s');
+        return $this->calculoHorasService->ajustarFechaAlFinalDelDiaSi12AM($fecha);
     }
 }
